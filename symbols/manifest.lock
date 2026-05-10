@@ -1,50 +1,76 @@
 {
-  "root": "95c02fdf18f74b3d",
-  "generated": "2026-05-10T03:30:13Z",
+  "root": "80416f1db9d2defb",
+  "generated": "2026-05-10T05:28:27Z",
   "status": "aligned",
   "symbols": {
     "architecture": {
-      "hash": "2c6754451be32b17",
-      "means": "architecture: db=sqlite, framework=next.js, runtime=node20",
+      "hash": "ba887812097cee90",
+      "means": "architecture: db=sqlite, framework=next.js, gitops=argocd, image_arch=linux/amd64, image_registry=dockerhub, orchestrator=kubernetes, runtime=node20",
       "docs": {
         "docs/architecture.md": {
-          "hash": "59e3a0476bc37e8c",
+          "hash": "1be64f48f104d0f2",
           "status": "current"
         }
       },
       "interlocks": {}
     },
     "auth": {
-      "hash": "b0d7552aeb3aef27",
-      "means": "auth: model=per_player_login, requires_session=True, result_confirmation=all_participants",
+      "hash": "e3b98a66a6f23a5d",
+      "means": "auth: model=discord_oauth, provider=discord, require_verified_email=True, requires_session=True, result_confirmation=all_participants, roles=['user', 'tournament_admin', 'global_admin'], scopes=['identify', 'email']",
       "docs": {
         "docs/auth.md": {
-          "hash": "7e4a5bcf87f82d32",
+          "hash": "32c999fa1d007caf",
+          "status": "current"
+        }
+      },
+      "interlocks": {}
+    },
+    "betting": {
+      "hash": "98e910aa4d9b90d4",
+      "means": "betting: cap_rule=max_abs_per_game_rating_delta, currency=overall_elo, escrow_at_placement=True, hidden_by_default=True, participant_self_bet_allowed=TBD, reveal_mechanism=TBD, settle_on=pending_to_confirmed, visibility=TBD, void_on=['disputed', 'cancelled']",
+      "docs": {
+        "docs/betting.md": {
+          "hash": "5577767d95a78c27",
           "status": "current"
         }
       },
       "interlocks": {}
     },
     "deployment": {
-      "hash": "ac5a26ea8f3262de",
-      "means": "deployment: expects_db=sqlite, expects_framework=next.js",
+      "hash": "25a18975c9f59e4b",
+      "means": "deployment: app_host=eloup.kodloki.io, canonical_remote=github, cluster=tow-c1, cluster_issuer=letsencrypt-prod, expects_db=sqlite, expects_framework=next.js, expects_gitops=argocd, expects_image_arch=linux/amd64, expects_image_registry=dockerhub, expects_orchestrator=kubernetes, git_hosts=['gitea_haxley', 'github'], gitops_archetype=shine_flat, host=linode_lke, host_pattern=<app>.kodloki.io, image_prefix=bholcombe/eloup-, ingress_class=nginx, namespace=eloup, region=us-sea-2, storage_class=linode-block-storage-retain, wizard_packaging=docker_image",
       "docs": {
         "docs/deployment.md": {
-          "hash": "2f19d9c9f720e367",
+          "hash": "2845957a67000e5b",
           "status": "current"
         }
       },
       "interlocks": {
         "architecture.framework == expects_framework": "PASS",
-        "architecture.db == expects_db": "PASS"
+        "architecture.db == expects_db": "PASS",
+        "architecture.orchestrator == expects_orchestrator": "PASS",
+        "architecture.gitops == expects_gitops": "PASS",
+        "architecture.image_registry == expects_image_registry": "PASS",
+        "architecture.image_arch == expects_image_arch": "PASS"
       }
     },
     "rating": {
-      "hash": "8d840ca75a2043fb",
-      "means": "rating: algorithm=elo, default_k=32, scope=per_game, starting_rating=1200",
+      "hash": "780273b29eb8228a",
+      "means": "rating: algorithm=elo, default_k=32, floor=0, overall_default_k=32, overall_rating_model=independent_elo, overall_starting_rating=1200, scope=per_game, starting_rating=1200",
       "docs": {
         "docs/rating.md": {
-          "hash": "bab8909c4b627092",
+          "hash": "e66dae8969d79c3b",
+          "status": "current"
+        }
+      },
+      "interlocks": {}
+    },
+    "tournaments": {
+      "hash": "e3dc76da93f0565a",
+      "means": "tournaments: creator_demotable=TBD, format=TBD, has_admin_role=True, invite_model=TBD, rating_pool=TBD",
+      "docs": {
+        "docs/tournaments.md": {
+          "hash": "7486a2df4424ff93",
           "status": "current"
         }
       },

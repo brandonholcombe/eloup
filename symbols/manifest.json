@@ -2,51 +2,113 @@
   "version": "1.0.0",
   "project": {
     "name": "eloup",
-    "intent": "Multi-game ELO tracking website for parties. Players log in, record results across multiple game types, and see per-game and aggregate ratings."
+    "intent": "Multi-game ELO tracking website for parties. Mobile-first PWA. Discord OAuth, per-game and overall ratings, tournaments, hidden ELO-betting. Deployed to a shared Linode LKE cluster via ArgoCD GitOps."
   },
   "symbols": {
     "architecture": {
-      "description": "Core stack: Next.js app (App Router) backed by SQLite via a single deployable Node process. Server actions handle score entry; better-sqlite3 owns the DB file.",
+      "description": "Next.js (App Router) on Node 20 backed by SQLite via better-sqlite3, packaged as a single AMD64 container. Orchestrated on Kubernetes; manifests reconciled by ArgoCD; images published to DockerHub.",
       "docs": ["docs/architecture.md"],
       "properties": {
         "framework": "next.js",
         "runtime": "node20",
-        "db": "sqlite"
+        "db": "sqlite",
+        "orchestrator": "kubernetes",
+        "gitops": "argocd",
+        "image_registry": "dockerhub",
+        "image_arch": "linux/amd64"
       },
       "interlocks": {}
     },
     "auth": {
-      "description": "Per-player login. Each player has an account; results are entered by one participant and require confirmation from the other(s) before they affect ratings.",
+      "description": "Discord OAuth via next-auth. Sign-in requires verified email; the stable FK is the Discord user id (snowflake), never the handle. Roles: user, tournament_admin, global_admin. Match-result confirmation policy is unchanged pending Q-AUTH-2.",
       "docs": ["docs/auth.md"],
       "properties": {
-        "model": "per_player_login",
+        "model": "discord_oauth",
+        "provider": "discord",
+        "scopes": ["identify", "email"],
+        "require_verified_email": true,
+        "roles": ["user", "tournament_admin", "global_admin"],
         "requires_session": true,
         "result_confirmation": "all_participants"
       },
       "interlocks": {}
     },
     "rating": {
-      "description": "ELO rating per (player, game). Aggregate cross-game rating is a derived view, not the source of truth.",
+      "description": "Per-(player, game) ELO is the source of truth. Overall rating is its own independent ELO updated per match using the same algorithm. Floor at 0 — overall ELO cannot go below zero (bet losses or rating updates clamp).",
       "docs": ["docs/rating.md"],
       "properties": {
         "algorithm": "elo",
         "scope": "per_game",
         "default_k": 32,
-        "starting_rating": 1200
+        "starting_rating": 1200,
+        "overall_rating_model": "independent_elo",
+        "overall_default_k": 32,
+        "overall_starting_rating": 1200,
+        "floor": 0
       },
       "interlocks": {}
     },
     "deployment": {
-      "description": "Single Next.js process with the SQLite file mounted on persistent storage. Target host is decided post-MVP.",
+      "description": "Linode LKE cluster tow-c1 (us-sea-2), namespace eloup, host eloup.kodloki.io. Shine flat layout (K8s/*.yaml). Pushes mirror to gitea (haxley) and github; ArgoCD watches the canonical GitHub remote. Wizard ships as the bholcombe/eloup-wizard Docker image.",
       "docs": ["docs/deployment.md"],
       "properties": {
         "expects_framework": "next.js",
-        "expects_db": "sqlite"
+        "expects_db": "sqlite",
+        "expects_orchestrator": "kubernetes",
+        "expects_gitops": "argocd",
+        "expects_image_registry": "dockerhub",
+        "expects_image_arch": "linux/amd64",
+        "host": "linode_lke",
+        "cluster": "tow-c1",
+        "region": "us-sea-2",
+        "namespace": "eloup",
+        "host_pattern": "<app>.kodloki.io",
+        "app_host": "eloup.kodloki.io",
+        "ingress_class": "nginx",
+        "cluster_issuer": "letsencrypt-prod",
+        "storage_class": "linode-block-storage-retain",
+        "image_prefix": "bholcombe/eloup-",
+        "gitops_archetype": "shine_flat",
+        "git_hosts": ["gitea_haxley", "github"],
+        "canonical_remote": "github",
+        "wizard_packaging": "docker_image"
       },
       "interlocks": {
         "architecture.framework": "expects_framework",
-        "architecture.db": "expects_db"
+        "architecture.db": "expects_db",
+        "architecture.orchestrator": "expects_orchestrator",
+        "architecture.gitops": "expects_gitops",
+        "architecture.image_registry": "expects_image_registry",
+        "architecture.image_arch": "expects_image_arch"
       }
+    },
+    "tournaments": {
+      "description": "Multi-match groupings with delegated admins. Bracket format, rating-pool isolation, invite semantics, and creator-demotion rules are TBD pending Q-TOURN-1..4 — tracked here so the schema and admin role exist now and the rules slot in without rewrites.",
+      "docs": ["docs/tournaments.md"],
+      "properties": {
+        "has_admin_role": true,
+        "format": "TBD",
+        "rating_pool": "TBD",
+        "invite_model": "TBD",
+        "creator_demotable": "TBD"
+      },
+      "interlocks": {}
+    },
+    "betting": {
+      "description": "Hidden ELO-betting on matches. Currency is overall ELO; wager is escrowed at placement (immediate debit) and settled when the match transitions pending → confirmed. Cap = max |per-game rating delta| among participants. Bets void on disputed/cancelled. Reveal mechanism, self-bet legality, and visibility are TBD.",
+      "docs": ["docs/betting.md"],
+      "properties": {
+        "currency": "overall_elo",
+        "cap_rule": "max_abs_per_game_rating_delta",
+        "escrow_at_placement": true,
+        "settle_on": "pending_to_confirmed",
+        "void_on": ["disputed", "cancelled"],
+        "hidden_by_default": true,
+        "reveal_mechanism": "TBD",
+        "participant_self_bet_allowed": "TBD",
+        "visibility": "TBD"
+      },
+      "interlocks": {}
     }
   }
 }

@@ -2,16 +2,26 @@
 
 ## Model
 
-Per-player login. Every player has an account; sessions are required for any state-changing action.
+Discord OAuth via `next-auth` (Discord provider). Scopes: `identify email`. Sign-in is rejected when Discord reports `verified === false` on the returned email — drive-by accounts stay out.
+
+The stable foreign key for a player is the **Discord user id (snowflake)**. Never the handle, which users can change. First-login bootstraps a `players` row keyed on `discord_id`.
+
+## Roles
+
+| Role               | Granted to                                                                   |
+|--------------------|------------------------------------------------------------------------------|
+| `user`             | Default for any authenticated player.                                         |
+| `tournament_admin` | Owners (and delegated admins) of a tournament.                                |
+| `global_admin`     | Cross-app god mode. Bootstrapped via the env var `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID` (or `_EMAIL` fallback) — first matching login is promoted once, then the var is ignored. Q-AUTH-3 still pending; default written above. |
+
+Role escalation rules outside that bootstrap are not yet specified.
 
 ## Result entry flow
 
-1. One participant opens "Log result," picks the game, picks the other participant(s), enters the result.
-2. The match is recorded with `status=pending` and **does not affect ratings yet**.
-3. Each other participant gets a pending-confirmation card on their dashboard.
-4. Once **all** participants have confirmed, the match transitions to `confirmed` and rating deltas are applied.
-5. Any participant can mark a pending match `disputed` instead of confirming; disputed matches need an admin to resolve.
+Match status moves through `scheduled → pending → confirmed | disputed | cancelled`. Ratings update **only** on `pending → confirmed`, atomically with bet settlement.
+
+The current policy is `result_confirmation = all_participants` — every named participant must confirm before ratings move. Q-AUTH-2 (whether confirmation is still required when any authenticated user can enter a match) is not yet decided; the policy will be revisited before M4 if the user picks (b) or (c).
 
 ## Why confirmation
 
-Single-entry without confirmation degrades into "whoever logs first writes history." Confirmation by all participants is the cheapest way to keep the leaderboard honest at party scale.
+Single-entry without confirmation degrades into "whoever logs first writes history." Confirmation by all participants is the cheapest way to keep the leaderboard honest at party scale, even with authenticated entry.
