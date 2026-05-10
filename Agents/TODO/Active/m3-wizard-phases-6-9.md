@@ -1,7 +1,7 @@
 # M3 — Wizard phases 6–9: manifests, push, DNS, ArgoCD register
 
 ## Author: claude-opus-4.7-m3-implementer
-## Status: Not Started
+## Status: In Progress
 
 > Implementation plan for milestone M3 of `project-review-and-plan.md` (§4.1
 > phases 6–9). Replaces the four remaining stubs in
@@ -14,6 +14,12 @@
 > only**, no review report bundled. The reviewer commits their report
 > separately as commit 2; implementer's feature commits become commits
 > 3 and 4.
+>
+> **Review-incorporation note (2026-05-10):** the independent review at
+> `Agents/Review-reports/m3-wizard-phases-6-9-review.md` raised 4 [MAJOR] +
+> 4 [MINOR] + 2 [NIT] findings. Sections below have been amended where the
+> review changed the plan; "Resolved review notes" at the bottom records
+> what changed and why.
 
 ---
 
@@ -117,7 +123,7 @@ else:
 | `K8s/service-web.yaml` | ClusterIP, port 3000 → containerPort 3000, selector `app=eloup-web` |
 | `K8s/configmap-web.yaml` | non-secret keys: `DISCORD_CLIENT_ID`, `APP_DOMAIN: https://<app_domain>`, `DATABASE_PATH: /data/eloup.sqlite` |
 | `K8s/sealed-secret-web.yaml` | SealedSecret produced by piping a generated Secret manifest through `kubeseal`. See "kubeseal invocation" below. |
-| `K8s/ingress.yaml` | `IngressClass: nginx`, host from `state.config.app_domain`, TLS `secretName: eloup-tls`. **Annotations copied verbatim from `shine/K8s/ingress.yaml` lines 7–26** with the host substituted in `cors-allow-origin`. Single backend rule: `/` → `eloup-web:3000`. (No `/api` split — eloup-web is one process serving both UI and API; shine's split was because shine has separate frontend/backend services.) |
+| `K8s/ingress.yaml` | `IngressClass: nginx`, host from `state.config.app_domain`, TLS `secretName: eloup-tls`. **Annotations copied verbatim from `shine/K8s/ingress.yaml` lines 6–27** with the host substituted in `cors-allow-origin` via the explicit `{app_domain}` template variable in `_manifests.py`. Single backend rule: `/` → `eloup-web:3000`. (No `/api` split — eloup-web is one process serving both UI and API; shine's split was because shine has separate frontend/backend services.) |
 | `argocd/eloup-app.yaml` | **Outside `K8s/`** so ArgoCD never syncs it back to itself (a self-sync loop is what putting the Application in the same path it watches would cause). `metadata.name: eloup`, `metadata.namespace: argocd`, `metadata.finalizers: [resources-finalizer.argocd.argoproj.io]`, `spec.project: default`, `spec.source.{repoURL: https://github.com/brandonholcombe/eloup.git, targetRevision: HEAD, path: K8s}`, `spec.destination.{server: https://kubernetes.default.svc, namespace: eloup}`, `spec.syncPolicy.automated: {prune: true, selfHeal: true}`, `syncOptions: [CreateNamespace=true]`, `revisionHistoryLimit: 3`. Matches the captain-sonar pattern. |
 
 ### kubeseal invocation
@@ -145,6 +151,8 @@ Notes:
 - The plaintext Secret never touches disk — it's only on `kubeseal`'s stdin. The output SealedSecret is what gets committed.
 - Sealed output is deterministic per (cert, plaintext, name, namespace) for the controller's lifetime; re-running phase 6 with unchanged inputs produces an identical SealedSecret. **Caveat for the reviewer:** kubeseal randomizes nonces by default, so the output is NOT byte-identical across runs. Idempotency for git purposes (no diff on re-run) is **not** guaranteed for `K8s/sealed-secret-web.yaml`; phase 7 must therefore tolerate "no change" (skip commit) AND "only sealed-secret-web.yaml changed" (commit it). See phase 7's `git diff --cached --quiet` skip.
 
+**Note on `pvc.yaml`:** the umbrella plan §4.1 lists a standalone `pvc.yaml` in the file set. M3 supersedes that with `volumeClaimTemplates` inline in the StatefulSet — the canonical pattern for stable per-pod PVC binding (matches Q-ARCH-1's StatefulSet decision). A standalone PVC would not be bound per-pod and would conflict with the StatefulSet's volume-management contract. The `_manifests.py` docstring records this supersession so a future reader cross-checking the umbrella plan does not look for a missing file.
+
 ### Atomicity
 
 The phase computes everything in memory first, then writes files. Sequence:
@@ -159,8 +167,9 @@ Mirrors the M2 phase-3 discipline of "deferred external mutation" — no working
 
 ### Idempotency / crash recovery
 
-- No substeps in `PHASE_DEFINITIONS["generate_manifests"]`. Phase is single-shot; on re-run, regenerates all files from current state. Safe because outputs are deterministic given the inputs.
+- No substeps in `PHASE_DEFINITIONS["generate_manifests"]`. Phase is single-shot; on re-run, regenerates all files from current state. Safe because outputs are deterministic given the inputs (modulo kubeseal nonce — see open question #3 / resolved review note 8).
 - Phase done iff every file was written. Failure leaves the state at `failed`; on `--retry-from generate_manifests` (or after fixing a broken input), the next run re-renders everything.
+- On success, `state.update_config({"generate_manifests_ts": <iso8601>})` is set alongside the phase-done call. Purely informational; future tooling can detect re-runs without comparing SealedSecret bytes.
 
 ### CLI flag plumbing
 
@@ -227,11 +236,16 @@ Per Q-WIZ-13: GitHub push failure is fatal regardless of the Gitea state. Gitea 
 ```
 git -C /workspace push gitea main
 on success → state.set_substep_status("push_manifests", "push_gitea", "done")
-on failure → log [yellow]"Gitea mirror push failed: <stderr>. Re-run with
-              --retry-from push_manifests to retry just the Gitea push."[/yellow]
+on failure → log [yellow]"Gitea mirror push failed: <stderr>. Re-run the wizard
+              without flags to retry just the Gitea push (the phase will resume
+              because phase status is 'failed' and push_github is still 'done').
+              Do NOT use --retry-from push_manifests — it resets ALL substeps
+              including push_github."[/yellow]
               set_substep_status(..., "push_gitea", "failed", error=stderr)
               do NOT raise
 ```
+
+**Why not `--retry-from`:** `state.reset_from(phase_name)` (see `wizard/wizard/state.py` line 186) blows away the entire phase entry, including substep state. If the operator runs `--retry-from push_manifests` after a Gitea-only failure, `push_github` resets from `done` → `pending`, so the phase would re-attempt the GitHub push as if from scratch. That's not what the operator wants. The correct retry path is a plain re-run: the phase is `failed`, the runner re-enters it, the substep skip-check below sees `push_github = "done"` and skips step 2, then retries step 3.
 
 **Phase done semantics (custom — per the brief):**
 
@@ -241,7 +255,7 @@ if state.phase("push_manifests")["substeps"]["push_github"]["status"] == "done":
     state.set_phase_status("push_manifests", "done")
 ```
 
-The `--retry-from push_manifests` invocation re-enters the phase. Step 1 (stage+commit) is no-op idempotent. Step 2 (GitHub push) is checked first: if `push_github = "done"`, skip step 2 entirely and go straight to step 3 (Gitea retry). If `push_github = "failed"`, retry step 2 (which will likely succeed — the same diff the operator pushed before is still in the index, but will be a no-op push with `Everything up-to-date` and exit 0). This means the substep-level granularity drives the retry — phase-level "done" doesn't gate.
+**Resume-without-retry-from semantics.** The phase MUST inspect `state.phase("push_manifests")["substeps"]["push_github"]["status"]` BEFORE running step 2 (a pre-check block at the top of `run`, not inline with the push logic). On a plain re-run after a Gitea-only failure: step 1 is no-op idempotent; step 2 is skipped because `push_github = "done"`; step 3 retries the Gitea push. On a re-run after a GitHub failure: step 2 retries (the existing commit is still in the index — push will succeed or fail again on the same root cause). On a re-run after both substeps `done` but the phase status was `failed` for some other reason: step 1 is no-op, step 2 is no-op (already done), step 3 is no-op (already done) — the phase recomputes done.
 
 **Idempotency:**
 - `git push` with no new commits → `Everything up-to-date`, exit 0. Safe to re-run.
@@ -273,10 +287,7 @@ The `--retry-from push_manifests` invocation re-enters the phase. Step 1 (stage+
   - Found AND `target != "172.232.176.47"` → `PhaseFailed` with "eloup A-record exists pointing at <target>, refusing to silently overwrite. Update the record manually or delete it and re-run."
   - Not found → `POST /v4/domains/<id>/records` body `{"type": "A", "name": "eloup", "target": "172.232.176.47", "ttl_sec": 3600}`. On 200 OK, capture the new record's `id`, log `[green]Created A-record eloup → 172.232.176.47.[/green]`.
 
-**Step 3 — best-effort verify** (only when we actually created the record):
-- Loop up to 60s, every 5s: `dig +short eloup.kodloki.io @ns1.linode.com`.
-  - Output contains `172.232.176.47` → log `[green]DNS resolved.[/green]`, done.
-  - Loop exhausts → log `[yellow]DNS created but resolver lag observed — continuing. Linode may take longer to propagate.[/yellow]`, **mark phase done anyway** (the Linode API success is authoritative; dig is just confidence).
+**No `dig` verification.** The original draft included a 60-second `dig +short` loop after a fresh create. Dropped per review MINOR #7: the wizard image's base (`python:3.11-slim`) does not bundle `dig` (no `dnsutils`), and the verification was already non-fatal — the Linode API 200 response is treated as authoritative. Adding `dnsutils` to the Dockerfile just for a best-effort confidence check is unjustified test/build friction. Operators who want a propagation check can run `dig` themselves; the phase logs the new record's id so the operator has a concrete handle.
 
 **Auth:** `headers = {"Authorization": f"Bearer {secrets['linode_pat']}", "Accept": "application/json"}`. The PAT is never logged.
 
@@ -290,7 +301,7 @@ The `--retry-from push_manifests` invocation re-enters the phase. Step 1 (stage+
 
 **Inputs:** `secrets["github_pat"]`, the Application CRD at `/workspace/argocd/eloup-app.yaml` (written by phase 6).
 
-**Step 1 — apply the ArgoCD repo-credential Secret:**
+**Step 1 — apply the ArgoCD repo-credential Secret (via stdin, not tmpfile):**
 
 Render the manifest in memory (do NOT commit it — it contains the PAT):
 ```yaml
@@ -309,7 +320,7 @@ stringData:
   password: <secrets["github_pat"]>
 ```
 
-Write to `Path(tempfile.mkstemp(suffix=".yaml"))` with `os.fchmod(fd, 0o600)` before the file content is written. `kubectl apply -f <tmpfile>`. `os.unlink(tmpfile)` in `finally` so the PAT-bearing file does NOT linger. (Could also use `kubectl apply -f -` with stdin to avoid disk entirely; the brief calls for a tmpfile, so I'll use a tmpfile but with strict 0600 mode and a guaranteed `finally` cleanup. If the reviewer prefers stdin, I'll switch — the difference is one subprocess call shape.)
+Pipe the rendered string to `kubectl apply -f -` via subprocess stdin. Adopted per review MINOR #6: matches the existing `docker login --password-stdin` pattern in `wizard/wizard/phases/build_images.py`, keeps the PAT off disk entirely (no `mkstemp`/`fchmod` race window, no SIGKILL-leaves-file risk), and removes a `finally`-cleanup obligation. The `_kubectl.py` helper module exposes `apply_stdin(manifest: str)` for this and any future caller.
 
 `stringData` (not `data`) so kubectl base64-encodes for us. Apply is idempotent: the existing Secret (if any) is updated with the new PAT.
 
@@ -321,29 +332,41 @@ kubectl apply -f /workspace/argocd/eloup-app.yaml
 
 Idempotent — `apply` updates an existing Application named `eloup` in `argocd` namespace. The CRD has `metadata.finalizers: [resources-finalizer.argocd.argoproj.io]` so manual `kubectl delete application eloup -n argocd` will properly cascade.
 
-**Step 3 — poll Synced/Healthy:**
+**Step 3 — poll Synced/Healthy (with not-yet-visible guard):**
 
 ```
 deadline = time.monotonic() + 600  # 10 min
-with Live(table_panel) as live:
+last_sync, last_health, last_conditions = None, None, []
+with Live(panel) as live:
     while time.monotonic() < deadline:
         proc = subprocess.run(["kubectl", "-n", "argocd", "get", "application", "eloup", "-o", "json"], ...)
-        body = json.loads(proc.stdout)
-        sync = body.get("status", {}).get("sync", {}).get("status")          # Synced | OutOfSync | Unknown
-        health = body.get("status", {}).get("health", {}).get("status")      # Healthy | Progressing | Degraded | Suspended | Missing | Unknown
-        live.update(render_panel(sync, health))
-        if sync == "Synced" and health == "Healthy":
+        if proc.returncode != 0:
+            live.update(render_panel("not-yet-visible", "—"))
+            time.sleep(10)
+            continue
+        try:
+            body = json.loads(proc.stdout)
+        except json.JSONDecodeError:
+            live.update(render_panel("not-yet-visible", "—"))
+            time.sleep(10)
+            continue
+        last_sync = body.get("status", {}).get("sync", {}).get("status")          # Synced | OutOfSync | Unknown | None
+        last_health = body.get("status", {}).get("health", {}).get("status")      # Healthy | Progressing | Degraded | Suspended | Missing | Unknown | None
+        last_conditions = body.get("status", {}).get("conditions") or []
+        live.update(render_panel(last_sync or "—", last_health or "—"))
+        if last_sync == "Synced" and last_health == "Healthy":
             break
         time.sleep(10)
     else:
         # Timeout
-        last_conditions = body.get("status", {}).get("conditions", [])
-        log [red]"Application did not reach Synced/Healthy in 10 min."
-        log "Last sync: <sync>, last health: <health>."
-        log "Conditions: <last_conditions>"
+        log [red]f"Application did not reach Synced/Healthy in 10 min."
+        log f"Last sync: {last_sync}, last health: {last_health}."
+        log f"Conditions: {last_conditions}"
         log "Debug: kubectl describe application eloup -n argocd"
         raise PhaseFailed("argocd_sync", "timeout waiting for Synced/Healthy")
 ```
+
+**Not-yet-visible guard.** Adopted per review MAJOR #1: between `kubectl apply` returning and ArgoCD's controller writing the resource's `status` sub-resource (or even the resource itself becoming visible to the API), `kubectl get` may exit non-zero with empty stdout. A bare `json.loads("")` would raise `JSONDecodeError`, surfacing an unhandled exception instead of looping. The two-tier guard (returncode check, then JSON-parse try/except) treats both modes as "not yet visible — keep polling." Only the deadline escalates.
 
 `Rich.live.Live` updates a single Rich `Panel` in place each tick — no terminal scroll spam.
 
@@ -379,13 +402,15 @@ All tests offline by default. Mark live tests with `@pytest.mark.live`. Use `res
 - **Idempotent re-run**: write once, then re-run; same files, same content (kubeseal mocked to return same bytes). Assert file mtimes are updated (proves we re-wrote) but contents match. Real-world kubeseal nonces will differ across runs; the test mocks kubeseal so the determinism check is on our renderer, not kubeseal.
 - **Ingress host substitution**: change `state.config["app_domain"]` to a non-default value, assert ingress.yaml's host AND `cors-allow-origin` annotation both reflect it.
 - **Sealed Secret only contains the two runtime keys, NOT the four PATs**: build the input plaintext from `secrets` dict that includes all six keys; assert the `kubeseal` stdin contained only `discord_client_secret` and `app_session_secret`.
+- **Ingress `cors-allow-origin` substitution**: set `state.config["app_domain"] = "test-eloup.example"`; assert the rendered ingress.yaml contains `cors-allow-origin: "https://test-eloup.example"` and NOT the literal string `shine.kodloki.io` anywhere.
+- **Image-key contract assertion**: verify the phase reads `state.config["last_built_images"]["eloup-web"]["sha_tag"]` exactly (not `"eloup_web"` or `"web"`). A test that presets the wrong key and asserts a clean `PhaseFailed` (rather than KeyError) covers a future M2 refactor regression.
 
 ### `test_push_manifests.py`
 
 - **Both pushes succeed**: mock `subprocess.run` for `git add/commit/push`; assert both substeps `done`, phase `done`.
 - **GitHub fails → PhaseFailed, Gitea not attempted**: `git push github` returns nonzero; assert phase `failed`, `push_github = failed`, `push_gitea` still `pending`, AND that `git push gitea` was never called.
 - **GitHub succeeds, Gitea fails → phase done with warning**: assert `push_github = done`, `push_gitea = failed` (with stderr captured), phase `done`. Assert console output contains the warning text.
-- **Re-run after Gitea-only failure**: preset `push_github = done, push_gitea = failed`; re-run skips the GitHub push (or runs it as a no-op `Everything up-to-date`), retries Gitea. Assert second-run state is both `done`.
+- **`test_retry_gitea_only_without_retry_from`**: preset `push_github = done, push_gitea = failed` directly in the state file (simulating the prior run's outcome). The phase resumes via plain re-entry (NOT `--retry-from`, which would reset the substep). Assert step 2 (GitHub push) is not invoked at all, step 3 (Gitea push) is invoked, second-run state has both substeps `done`. Test docstring explains why `--retry-from` is not used (would reset `push_github`).
 - **No diff to commit → skip commit, push still attempted**: mock `git diff --cached --quiet` to exit 0 (no diff); assert no `git commit` call, but `git push` still runs (for the case where a previous run committed but failed mid-push).
 
 ### `test_dns_record.py`
@@ -396,16 +421,16 @@ All tests offline by default. Mark live tests with `@pytest.mark.live`. Use `res
 - **Domain absent → PhaseFailed**: pages exhausted without a match. Assert phase fails with a message naming `kodloki.io`.
 - **`--skip-dns` → no API calls**: assert `state.config["dns_skipped"] is True`, phase done, no `responses` calls registered fired.
 - **Cached domain id → skip the GET /v4/domains paginate**: preset `state.config["linode_domain_id_kodloki_io"] = 12345`; assert only the records endpoint is hit.
-- **dig verification timeout is non-fatal**: when the create-record path fires, mock `subprocess.run("dig", ...)` to return empty output; assert phase done with a yellow warning logged.
 
 ### `test_argocd_sync.py`
 
 - **Happy path — synced/healthy on first poll**: mock `subprocess.run` for both `kubectl apply` calls and the `kubectl get application` poll; the get returns `{"status": {"sync": {"status": "Synced"}, "health": {"status": "Healthy"}}}`. Assert phase done, `state.config["eloup_url"] == "https://eloup.kodloki.io"`.
 - **Becomes healthy after N polls**: get returns `Progressing` 3 times then `Healthy`; assert poll loop exits cleanly. Speed-up by patching `time.sleep` to a no-op.
 - **Polling timeout → PhaseFailed**: get always returns `Progressing`; patch `time.monotonic` so the loop's deadline is reached after a few iterations. Assert error message includes the last-known sync+health and references `kubectl describe application eloup`.
-- **Repo Secret tmpfile is deleted in `finally`**: patch `tempfile.mkstemp` to return a path under `tmp_path`; even when the second apply fails, assert the tmpfile no longer exists after the call.
+- **Repo Secret applied via stdin, not tmpfile**: assert the `kubectl apply -f -` subprocess was invoked with the manifest as `input=` (subprocess kwarg), and that no temporary file was created. Also assert the PAT does not appear in `argv` and only appears once in the `input` kwarg (as the `password:` field of `stringData`, never repeated).
 - **Application CRD apply uses the file phase 6 wrote**: set `ARGOCD_DIR / "eloup-app.yaml"` content; assert `kubectl apply -f <that exact path>` was invoked.
-- **No PAT in argv**: assert no `kubectl` invocation's argv includes the literal PAT string. (Defensive — the PAT goes via stdin/file, never argv.)
+- **Application not yet visible to the API server**: first 2 `kubectl get application` calls return exit 1 with empty stdout (resource not yet visible); third call returns valid JSON with `status` absent (resource visible, status sub-resource not yet written by ArgoCD); fourth returns Synced/Healthy. Assert the loop continues without raising and reports done at the end. Also covers the `JSONDecodeError` and `proc.returncode != 0` branches.
+- **Polling timeout → PhaseFailed**: get always returns valid JSON with `Progressing/Progressing`; patch `time.monotonic` so the loop's deadline is reached after a few iterations. Assert error message includes the last-known sync+health and references `kubectl describe application eloup`.
 
 ### Existing tests
 
@@ -430,7 +455,7 @@ Add two CLI-threading tests to `test_cli.py`:
 7. **End-to-end live run** (gated on operator supplying real PATs):
    - Pre-req: phases 1–5 already run successfully against tow-c1.
    - Run with `--web-image nginx:1.27-alpine` (M4 has not shipped, eloup-web image absent).
-     - Phase 6 renders 6 K8s/*.yaml + argocd/eloup-app.yaml; sealed-secret-web.yaml decrypts back to the right plaintext via `kubeseal --recovery-unseal --recovery-private-key <controller-key>` (manual operator check).
+     - Phase 6 renders 6 `K8s/*.yaml` + `argocd/eloup-app.yaml` (no standalone `pvc.yaml` — superseded by `volumeClaimTemplates` inline in the StatefulSet); sealed-secret-web.yaml decrypts back to the right plaintext via `kubeseal --recovery-unseal --recovery-private-key <controller-key>` (manual operator check).
      - Phase 7 commits both directories and pushes to GitHub + Gitea.
      - Phase 8 creates the A-record (or detects-and-skips).
      - Phase 9 applies the Secret + Application, polls Synced/Healthy (nginx pod will become healthy on TCP probe).
@@ -474,18 +499,34 @@ This contract is intentionally narrow: it lets M4 ship an app without re-derivin
 
 ---
 
-## Open questions / notes for the reviewer
+## Resolved review notes
 
-These are calls I'd like the reviewer to either ratify or push back on:
+The independent review at `Agents/Review-reports/m3-wizard-phases-6-9-review.md` produced the following changes to this plan. Each item names the review finding it addresses and the section above that was amended.
 
-1. **Single backend rule in `K8s/ingress.yaml`** — eloup-web serves both UI and API from one Next.js process, so I'm collapsing shine's `/api` + `/metrics` + `/` three-way split into a single `/` rule. If the reviewer thinks Prometheus scraping should be reserved (a `/metrics` rule today), I can add it — the eloup-web app M4 might want to expose metrics on a separate port via the Service, in which case the ingress doesn't need a `/metrics` rule.
+1. **[MAJOR #1] Phase 9 poll loop crashes on absent `status` block / non-JSON stdout.** Phase 9 step 3 is now wrapped in a two-tier guard: `proc.returncode != 0` → log "not yet visible" + continue; `json.JSONDecodeError` on `proc.stdout` → same. Only the 10-min deadline escalates to `PhaseFailed`. The `last_sync`/`last_health`/`last_conditions` accumulators are initialized to `None`/`None`/`[]` so the timeout error path always has values to log, even if every poll fell into the not-yet-visible branch. Test coverage extended with an explicit "first 2 calls return exit 1, third returns valid JSON without status, fourth returns Synced/Healthy" case.
 
-2. **Phase 9 step 1 — tmpfile vs stdin for the repo Secret.** I'm planning a tmpfile (mode 0600, `finally` cleanup) per the brief's literal text. If the reviewer prefers `kubectl apply -f - < manifest_string` to keep the PAT off disk entirely, I'll switch — the difference is small and stdin is marginally safer.
+2. **[MAJOR #2] Ingress annotation line-reference is wrong + template variable is unnamed.** The phase 6 file table now cites `lines 6–27` (correct range — the annotations block runs from `annotations:` on line 6 through `cors-allow-credentials: "true"` on line 27). The substitution variable in `_manifests.py`'s ingress template will be the explicit `{app_domain}` placeholder, not an inline f-string substitution. New test asserts the rendered `cors-allow-origin` value reflects a non-default `state.config["app_domain"]` and never contains the literal string `shine.kodloki.io`.
 
-3. **Sealed Secret nonces are non-deterministic across runs.** I document this as a phase-7 idempotency caveat ("on re-run, only `sealed-secret-web.yaml` may diff"). The alternative is to skip re-rendering the SealedSecret if `K8s/sealed-secret-web.yaml` already exists and the plaintext inputs haven't changed (would need a hash side-car) — feels overengineered for M3. Defer to a follow-up if the operator finds the per-run drift annoying.
+3. **[MAJOR #3] `--retry-from push_manifests` resets substep state.** Phase 7's warning log on Gitea-only failure now tells operators to **re-run the wizard without flags** (NOT `--retry-from push_manifests`, which `state.reset_from()` would use to wipe `push_github` from `done` to `pending`). The phase's own resume logic (substep skip-check at the top of `run`) handles the Gitea-only retry correctly when called via plain re-entry. The corresponding test is renamed to `test_retry_gitea_only_without_retry_from` with a docstring explaining the constraint.
 
-4. **`loadbalancer_ip` symbol property.** Adding `loadbalancer_ip: "172.232.176.47"` to the deployment symbol would consolidate the constant currently duplicated between `cluster_conventions.md` (memory) and `dns_record.py` (module constant). It's a one-line `manifest.json` change + a `lock` regen. I'm deferring it to keep M3's symbol diff at zero (review surface stays focused on phase code), but if the reviewer prefers it in M3 I'll fold it in.
+4. **[MAJOR #4] `pvc.yaml` mismatch between umbrella plan and M3 plan.** A note in phase 6 (and the verification step) records that the standalone `pvc.yaml` listed in `project-review-and-plan.md` §4.1 is superseded by `volumeClaimTemplates` inline in the StatefulSet — the canonical pattern for stable per-pod PVC binding under Q-ARCH-1. The `_manifests.py` module-level docstring repeats this so a future reader doesn't look for a missing file.
 
-5. **`--web-image` + probe shape coupling.** The brief specifies "TCP probe when `--web-image` is set, httpGet `/api/health` otherwise." This couples a CLI flag to a manifest-render decision. An alternative is a separate `--web-probe={tcp,http}` flag, but the coupling matches operator intent (placeholder image ⇒ TCP) and avoids flag explosion. Holding the coupling unless the reviewer flags it.
+5. **[MINOR #5] M2→M3 contract key names verified.** No code change; the reviewer confirmed `state.config["sealed_secrets_namespace"]`, `state.config["sealed_secrets_cert_path"]`, and `state.config["last_built_images"]["eloup-web"]["sha_tag"]` all match the actual M2 implementation. A new test in `test_generate_manifests.py` asserts the phase reads the exact key path so a future M2 refactor doesn't silently break phase 6.
 
-6. **Phase 7 commit-message SHA when no eloup-web was built.** If the operator ran `--web-image nginx:1.27-alpine` and skipped phase 5 entirely, `state.config["last_built_sha"]` may be absent. My fallback is the literal string `unknown-sha` in the commit message. The reviewer may prefer requiring phase 5 to have run at least once (even if eloup-web was skipped, the wizard-image build sets `last_built_sha`) — in which case absence becomes a `PhaseFailed` instead. Defaulting to graceful for now since the smoke-test path exists exactly to bypass M4 dependencies.
+6. **[MINOR #6] Phase 9 step 1: stdin over tmpfile.** The repo-credential Secret is now applied via `kubectl apply -f -` with the manifest piped to subprocess stdin (consistent with `docker login --password-stdin` in `wizard/wizard/phases/build_images.py`). No `mkstemp`/`fchmod`/`unlink` dance, no SIGKILL-leaves-file risk, no `finally` obligation. The `_kubectl.py` helper module exposes `apply_stdin(manifest: str)` for this and any future caller. Test updated to assert no tmpfile is created and the PAT is not in `argv`.
+
+7. **[MINOR #7] `dig` is not in `python:3.11-slim`.** Phase 8 step 3 (the 60-second `dig +short` verification loop) is dropped entirely. The Linode API success is already authoritative and the original step was best-effort/non-fatal. Skipping `dig` removes an external dependency, eliminates a Dockerfile change, and removes a test fixture. Operators who want a propagation check run `dig` themselves; the phase logs the new record's id as a concrete handle.
+
+8. **[MINOR #8] Sealed-secret nonce non-determinism.** Position deferred per reviewer's recommendation. Adding a hash side-car is overengineered for M3. As a one-liner concession, phase 6's success path now writes `state.update_config({"generate_manifests_ts": _now()})` so future tooling can detect re-runs without comparing SealedSecret bytes. No behavioral change.
+
+9. **[NIT #9] `last_built_sha` fallback chain.** Phase 7's commit-message SHA now falls through `state.config["last_built_sha"]` → `state.config["last_built_images"]["eloup-wizard"]["sha_tag"]` → literal `"unknown-sha"`. The wizard image is built every phase-5 invocation (even when eloup-web is skipped), so the second tier is virtually always populated. The literal `"unknown-sha"` final fallback is preserved for the truly-skipped phase-5 case (operator running `--retry-from push_manifests` against a wholly fresh state).
+
+10. **[NIT #10] `test_push_manifests.py` retry-test naming.** Test name and docstring updated per the review (see resolved note #3 above).
+
+### Open questions the reviewer did not weigh in on
+
+These remain as recorded design choices, not blockers:
+
+- **Single backend rule in `K8s/ingress.yaml`** — kept (eloup-web is one Next.js process; shine's `/api` split was due to a separate backend service). Prometheus scraping can be reserved later via a separate Service + ServiceMonitor without an ingress change.
+- **`loadbalancer_ip` symbol property** — deferred; M3's symbol diff stays at zero. Will follow up only if the constant grows a second consumer.
+- **`--web-image` + probe shape coupling** — kept; the placeholder-image case implies a TCP probe (real eloup-web is the only thing serving `/api/health`). A separate `--web-probe` flag would be operator overhead with no real upside.
