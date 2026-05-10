@@ -1,6 +1,6 @@
 {
-  "root": "80416f1db9d2defb",
-  "generated": "2026-05-10T05:28:27Z",
+  "root": "63cf23a926c0b318",
+  "generated": "2026-05-10T07:09:26Z",
   "status": "aligned",
   "symbols": {
     "architecture": {
@@ -37,8 +37,8 @@
       "interlocks": {}
     },
     "deployment": {
-      "hash": "25a18975c9f59e4b",
-      "means": "deployment: app_host=eloup.kodloki.io, canonical_remote=github, cluster=tow-c1, cluster_issuer=letsencrypt-prod, expects_db=sqlite, expects_framework=next.js, expects_gitops=argocd, expects_image_arch=linux/amd64, expects_image_registry=dockerhub, expects_orchestrator=kubernetes, git_hosts=['gitea_haxley', 'github'], gitops_archetype=shine_flat, host=linode_lke, host_pattern=<app>.kodloki.io, image_prefix=bholcombe/eloup-, ingress_class=nginx, namespace=eloup, region=us-sea-2, storage_class=linode-block-storage-retain, wizard_packaging=docker_image",
+      "hash": "ec8b4bb494da7e2a",
+      "means": "deployment: app_host=eloup.kodloki.io, canonical_remote=github, cluster=tow-c1, cluster_issuer=letsencrypt-prod, expects_db=sqlite, expects_framework=next.js, expects_gitops=argocd, expects_image_arch=linux/amd64, expects_image_registry=dockerhub, expects_orchestrator=kubernetes, git_hosts=['gitea_haxley', 'github'], gitops_archetype=shine_flat, host=linode_lke, host_pattern=<app>.kodloki.io, image_prefix=bholcombe/eloup-, ingress_class=nginx, namespace=eloup, region=us-sea-2, sealed_secrets_version=v0.27.1, secret_management=sealed_secrets, storage_class=linode-block-storage-retain, wizard_packaging=docker_image",
       "docs": {
         "docs/deployment.md": {
           "hash": "2845957a67000e5b",

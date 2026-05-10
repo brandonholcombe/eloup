@@ -18,6 +18,7 @@ class PhaseContext:
     config_path: Path | None
     generate_session: bool
     keep: bool
+    install_sealed_secrets: bool = False
 
 
 class Phase(Protocol):

@@ -71,7 +71,9 @@
         "gitops_archetype": "shine_flat",
         "git_hosts": ["gitea_haxley", "github"],
         "canonical_remote": "github",
-        "wizard_packaging": "docker_image"
+        "wizard_packaging": "docker_image",
+        "secret_management": "sealed_secrets",
+        "sealed_secrets_version": "v0.27.1"
       },
       "interlocks": {
         "architecture.framework": "expects_framework",

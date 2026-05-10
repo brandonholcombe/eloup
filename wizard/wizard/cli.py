@@ -51,6 +51,15 @@ from wizard.state import PHASE_NAMES, WizardState, delete_state
     is_flag=True,
     help="Generate a random 32-byte app session secret instead of prompting for one.",
 )
+@click.option(
+    "--install-sealed-secrets",
+    "install_sealed_secrets",
+    is_flag=True,
+    help=(
+        "If the Sealed Secrets controller is missing during phase 4, install the "
+        "pinned upstream manifest. Without this flag, a missing controller is a hard fail."
+    ),
+)
 @click.version_option(__version__, prog_name="eloup-wizard")
 def main(
     config_path: Path | None,
@@ -59,6 +68,7 @@ def main(
     keep: bool,
     state_dir_override: Path | None,
     generate_session: bool,
+    install_sealed_secrets: bool,
 ) -> None:
     """EloUp deployment wizard — preflight, collect secrets, provision, deploy."""
     state_dir = state_dir_override.expanduser() if state_dir_override else default_state_dir()
@@ -87,5 +97,6 @@ def main(
         config_path=config_path,
         generate_session=generate_session,
         keep=keep,
+        install_sealed_secrets=install_sealed_secrets,
     )
     sys.exit(run(ctx))
