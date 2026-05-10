@@ -1,29 +1,51 @@
 {
   "version": "1.0.0",
   "project": {
-    "name": "my-project",
-    "intent": "Describe what this project does"
+    "name": "eloup",
+    "intent": "Multi-game ELO tracking website for parties. Players log in, record results across multiple game types, and see per-game and aggregate ratings."
   },
   "symbols": {
     "architecture": {
-      "description": "Core system architecture and provider decisions",
+      "description": "Core stack: Next.js app (App Router) backed by SQLite via a single deployable Node process. Server actions handle score entry; better-sqlite3 owns the DB file.",
       "docs": ["docs/architecture.md"],
       "properties": {
-        "provider": "akamai",
-        "schema_version": 3
+        "framework": "next.js",
+        "runtime": "node20",
+        "db": "sqlite"
+      },
+      "interlocks": {}
+    },
+    "auth": {
+      "description": "Per-player login. Each player has an account; results are entered by one participant and require confirmation from the other(s) before they affect ratings.",
+      "docs": ["docs/auth.md"],
+      "properties": {
+        "model": "per_player_login",
+        "requires_session": true,
+        "result_confirmation": "all_participants"
+      },
+      "interlocks": {}
+    },
+    "rating": {
+      "description": "ELO rating per (player, game). Aggregate cross-game rating is a derived view, not the source of truth.",
+      "docs": ["docs/rating.md"],
+      "properties": {
+        "algorithm": "elo",
+        "scope": "per_game",
+        "default_k": 32,
+        "starting_rating": 1200
       },
       "interlocks": {}
     },
     "deployment": {
-      "description": "Deployment targets and infrastructure requirements",
+      "description": "Single Next.js process with the SQLite file mounted on persistent storage. Target host is decided post-MVP.",
       "docs": ["docs/deployment.md"],
       "properties": {
-        "expects_provider": "akamai",
-        "expects_schema": 3
+        "expects_framework": "next.js",
+        "expects_db": "sqlite"
       },
       "interlocks": {
-        "architecture.provider": "expects_provider",
-        "architecture.schema_version": "expects_schema"
+        "architecture.framework": "expects_framework",
+        "architecture.db": "expects_db"
       }
     }
   }

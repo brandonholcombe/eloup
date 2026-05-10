@@ -65,4 +65,8 @@ A PreToolUse hook (`.claude/hooks/require-review.sh`) enforces **review before i
 
 ## Project-Specific Instructions
 
-<!-- Add your project-specific Claude Code instructions below this line -->
+**eloup** is a multi-game ELO tracking website for parties. Stack and intent live in `symbols/manifest.json`; see `docs/` for the why behind each symbol.
+
+When making decisions that affect a tracked symbol (architecture, auth, rating, deployment), update the relevant `properties` and re-run `python scripts/align.py lock` so the manifest and lock travel together.
+
+The application code does not exist yet — the next concrete step is scaffolding the Next.js app in this directory. Plan that work via `Agents/TODO/Active/` so the review gate kicks in before source files appear.

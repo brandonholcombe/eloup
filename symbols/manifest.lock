@@ -1,32 +1,54 @@
 {
-  "root": "bd325b5ac420c28e",
-  "generated": "2026-03-10T00:28:52Z",
+  "root": "95c02fdf18f74b3d",
+  "generated": "2026-05-10T03:30:13Z",
   "status": "aligned",
   "symbols": {
     "architecture": {
-      "hash": "e844bb185f438c14",
-      "means": "architecture: provider=akamai, schema_version=3",
+      "hash": "2c6754451be32b17",
+      "means": "architecture: db=sqlite, framework=next.js, runtime=node20",
       "docs": {
         "docs/architecture.md": {
-          "hash": "5c6ba121447020b0",
+          "hash": "59e3a0476bc37e8c",
+          "status": "current"
+        }
+      },
+      "interlocks": {}
+    },
+    "auth": {
+      "hash": "b0d7552aeb3aef27",
+      "means": "auth: model=per_player_login, requires_session=True, result_confirmation=all_participants",
+      "docs": {
+        "docs/auth.md": {
+          "hash": "7e4a5bcf87f82d32",
           "status": "current"
         }
       },
       "interlocks": {}
     },
     "deployment": {
-      "hash": "fc7a37a922c7f231",
-      "means": "deployment: expects_provider=akamai, expects_schema=3",
+      "hash": "ac5a26ea8f3262de",
+      "means": "deployment: expects_db=sqlite, expects_framework=next.js",
       "docs": {
         "docs/deployment.md": {
-          "hash": "df511d990f8e0ae8",
+          "hash": "2f19d9c9f720e367",
           "status": "current"
         }
       },
       "interlocks": {
-        "architecture.provider == expects_provider": "PASS",
-        "architecture.schema_version == expects_schema": "PASS"
+        "architecture.framework == expects_framework": "PASS",
+        "architecture.db == expects_db": "PASS"
       }
+    },
+    "rating": {
+      "hash": "8d840ca75a2043fb",
+      "means": "rating: algorithm=elo, default_k=32, scope=per_game, starting_rating=1200",
+      "docs": {
+        "docs/rating.md": {
+          "hash": "bab8909c4b627092",
+          "status": "current"
+        }
+      },
+      "interlocks": {}
     }
   }
 }
