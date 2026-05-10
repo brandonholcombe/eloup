@@ -20,18 +20,6 @@ class _Stub:
         raise PhaseFailed(self.name, f"not yet implemented — pick this up in {self.next_milestone}")
 
 
-class GenerateManifestsPhase(_Stub):
-    name = "generate_manifests"
-    title = "Phase 6 — Generate manifests"
-    next_milestone = "M3"
-
-
-class PushManifestsPhase(_Stub):
-    name = "push_manifests"
-    title = "Phase 7 — Push manifests to both remotes"
-    next_milestone = "M3"
-
-
 class DnsRecordPhase(_Stub):
     name = "dns_record"
     title = "Phase 8 — Linode DNS A-record"

@@ -23,7 +23,15 @@ def test_help_exits_zero_and_lists_flags() -> None:
 
     assert result.exit_code == 0
     assert "EloUp deployment wizard" in result.output
-    for flag in ("--retry-from", "--reset", "--config", "--keep", "--state-dir"):
+    for flag in (
+        "--retry-from",
+        "--reset",
+        "--config",
+        "--keep",
+        "--state-dir",
+        "--install-sealed-secrets",
+        "--web-image",
+    ):
         assert flag in result.output, f"--help is missing {flag}"
 
 
@@ -97,3 +105,45 @@ def test_delete_state_is_idempotent(tmp_path: Path) -> None:
     secrets_file = tmp_path / "secrets.json"
     delete_state(state_file, secrets_file)
     delete_state(state_file, secrets_file)
+
+
+def test_web_image_flag_threads_into_phase_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(ctx, phases=None):
+        captured["web_image"] = ctx.web_image
+        captured["install_sealed_secrets"] = ctx.install_sealed_secrets
+        return 0
+
+    monkeypatch.setattr("wizard.cli.run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        [
+            "--state-dir",
+            str(tmp_path / "state"),
+            "--web-image",
+            "nginx:1.27-alpine",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["web_image"] == "nginx:1.27-alpine"
+    assert captured["install_sealed_secrets"] is False
+
+
+def test_web_image_default_is_none(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(ctx, phases=None):
+        captured["web_image"] = ctx.web_image
+        return 0
+
+    monkeypatch.setattr("wizard.cli.run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["--state-dir", str(tmp_path / "state")])
+    assert result.exit_code == 0, result.output
+    assert captured["web_image"] is None

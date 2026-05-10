@@ -6,14 +6,11 @@ from wizard.phases.base import Phase, PhaseContext, PhaseFailed
 from wizard.phases.build_images import BuildImagesPhase
 from wizard.phases.cluster_bootstrap import ClusterBootstrapPhase
 from wizard.phases.collect_secrets import CollectSecretsPhase
+from wizard.phases.generate_manifests import GenerateManifestsPhase
 from wizard.phases.preflight import PreflightPhase
 from wizard.phases.provision_repos import ProvisionReposPhase
-from wizard.phases.stubs import (
-    ArgocdSyncPhase,
-    DnsRecordPhase,
-    GenerateManifestsPhase,
-    PushManifestsPhase,
-)
+from wizard.phases.push_manifests import PushManifestsPhase
+from wizard.phases.stubs import ArgocdSyncPhase, DnsRecordPhase
 from wizard.state import PHASE_NAMES
 
 

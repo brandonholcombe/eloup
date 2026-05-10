@@ -19,6 +19,7 @@ class PhaseContext:
     generate_session: bool
     keep: bool
     install_sealed_secrets: bool = False
+    web_image: str | None = None
 
 
 class Phase(Protocol):

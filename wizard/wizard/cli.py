@@ -60,6 +60,18 @@ from wizard.state import PHASE_NAMES, WizardState, delete_state
         "pinned upstream manifest. Without this flag, a missing controller is a hard fail."
     ),
 )
+@click.option(
+    "--web-image",
+    "web_image",
+    type=str,
+    default=None,
+    help=(
+        "Override the eloup-web image reference for phase 6 instead of reading it from "
+        "state.config.last_built_images. Useful for end-to-end pipeline smoke-tests "
+        "before M4 ships the real Next.js app (e.g. --web-image nginx:1.27-alpine — "
+        "phase 6 falls back to a TCP probe when this is set)."
+    ),
+)
 @click.version_option(__version__, prog_name="eloup-wizard")
 def main(
     config_path: Path | None,
@@ -69,6 +81,7 @@ def main(
     state_dir_override: Path | None,
     generate_session: bool,
     install_sealed_secrets: bool,
+    web_image: str | None,
 ) -> None:
     """EloUp deployment wizard — preflight, collect secrets, provision, deploy."""
     state_dir = state_dir_override.expanduser() if state_dir_override else default_state_dir()
@@ -98,5 +111,6 @@ def main(
         generate_session=generate_session,
         keep=keep,
         install_sealed_secrets=install_sealed_secrets,
+        web_image=web_image,
     )
     sys.exit(run(ctx))
