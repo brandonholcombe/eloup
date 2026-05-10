@@ -3,15 +3,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from wizard.phases.base import Phase, PhaseContext, PhaseFailed
+from wizard.phases.build_images import BuildImagesPhase
+from wizard.phases.cluster_bootstrap import ClusterBootstrapPhase
 from wizard.phases.collect_secrets import CollectSecretsPhase
 from wizard.phases.preflight import PreflightPhase
+from wizard.phases.provision_repos import ProvisionReposPhase
 from wizard.phases.stubs import (
     ArgocdSyncPhase,
-    BuildImagesPhase,
-    ClusterBootstrapPhase,
     DnsRecordPhase,
     GenerateManifestsPhase,
-    ProvisionReposPhase,
     PushManifestsPhase,
 )
 from wizard.state import PHASE_NAMES

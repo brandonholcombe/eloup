@@ -20,24 +20,6 @@ class _Stub:
         raise PhaseFailed(self.name, f"not yet implemented — pick this up in {self.next_milestone}")
 
 
-class ProvisionReposPhase(_Stub):
-    name = "provision_repos"
-    title = "Phase 3 — Provision repos (Gitea + GitHub)"
-    next_milestone = "M2"
-
-
-class ClusterBootstrapPhase(_Stub):
-    name = "cluster_bootstrap"
-    title = "Phase 4 — Cluster bootstrap detection"
-    next_milestone = "M2"
-
-
-class BuildImagesPhase(_Stub):
-    name = "build_images"
-    title = "Phase 5 — Build & push images"
-    next_milestone = "M2"
-
-
 class GenerateManifestsPhase(_Stub):
     name = "generate_manifests"
     title = "Phase 6 — Generate manifests"
