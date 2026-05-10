@@ -1,7 +1,7 @@
 # M3 — Wizard phases 6–9: manifests, push, DNS, ArgoCD register
 
 ## Author: claude-opus-4.7-m3-implementer
-## Status: In Progress
+## Status: Complete
 
 > Implementation plan for milestone M3 of `project-review-and-plan.md` (§4.1
 > phases 6–9). Replaces the four remaining stubs in
