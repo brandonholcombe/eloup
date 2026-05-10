@@ -20,6 +20,7 @@ class PhaseContext:
     keep: bool
     install_sealed_secrets: bool = False
     web_image: str | None = None
+    skip_dns: bool = False
 
 
 class Phase(Protocol):

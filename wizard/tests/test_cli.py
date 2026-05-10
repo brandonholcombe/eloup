@@ -31,6 +31,7 @@ def test_help_exits_zero_and_lists_flags() -> None:
         "--state-dir",
         "--install-sealed-secrets",
         "--web-image",
+        "--skip-dns",
     ):
         assert flag in result.output, f"--help is missing {flag}"
 
@@ -139,6 +140,7 @@ def test_web_image_default_is_none(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 
     def fake_run(ctx, phases=None):
         captured["web_image"] = ctx.web_image
+        captured["skip_dns"] = ctx.skip_dns
         return 0
 
     monkeypatch.setattr("wizard.cli.run", fake_run)
@@ -147,3 +149,21 @@ def test_web_image_default_is_none(tmp_path: Path, monkeypatch: pytest.MonkeyPat
     result = runner.invoke(main, ["--state-dir", str(tmp_path / "state")])
     assert result.exit_code == 0, result.output
     assert captured["web_image"] is None
+    assert captured["skip_dns"] is False
+
+
+def test_skip_dns_flag_threads_into_phase_context(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(ctx, phases=None):
+        captured["skip_dns"] = ctx.skip_dns
+        return 0
+
+    monkeypatch.setattr("wizard.cli.run", fake_run)
+
+    runner = CliRunner()
+    result = runner.invoke(main, ["--state-dir", str(tmp_path / "state"), "--skip-dns"])
+    assert result.exit_code == 0, result.output
+    assert captured["skip_dns"] is True

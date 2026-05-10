@@ -72,6 +72,16 @@ from wizard.state import PHASE_NAMES, WizardState, delete_state
         "phase 6 falls back to a TCP probe when this is set)."
     ),
 )
+@click.option(
+    "--skip-dns",
+    "skip_dns",
+    is_flag=True,
+    help=(
+        "Skip phase 8 (Linode DNS A-record creation) — operator handles the "
+        "eloup.kodloki.io record out of band. The phase is marked done with "
+        "dns_skipped=True in state."
+    ),
+)
 @click.version_option(__version__, prog_name="eloup-wizard")
 def main(
     config_path: Path | None,
@@ -82,6 +92,7 @@ def main(
     generate_session: bool,
     install_sealed_secrets: bool,
     web_image: str | None,
+    skip_dns: bool,
 ) -> None:
     """EloUp deployment wizard — preflight, collect secrets, provision, deploy."""
     state_dir = state_dir_override.expanduser() if state_dir_override else default_state_dir()
@@ -112,5 +123,6 @@ def main(
         keep=keep,
         install_sealed_secrets=install_sealed_secrets,
         web_image=web_image,
+        skip_dns=skip_dns,
     )
     sys.exit(run(ctx))
