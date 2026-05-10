@@ -8,3 +8,5 @@ build/
 .env
 .venv/
 node_modules/
+.pytest_cache/
+.ruff_cache/

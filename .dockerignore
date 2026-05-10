@@ -1,0 +1,14 @@
+.git
+.github
+Agents
+docs
+symbols
+scripts
+.claude
+**/__pycache__
+**/*.pyc
+wizard/.pytest_cache
+wizard/.ruff_cache
+wizard/build
+wizard/dist
+wizard/*.egg-info
