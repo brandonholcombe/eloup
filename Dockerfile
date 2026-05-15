@@ -34,6 +34,17 @@ RUN apt-get update \
         ca-certificates curl git tini \
  && rm -rf /var/lib/apt/lists/*
 
+# Default git identity for phase 7's wizard-authored commit. The wizard runs
+# as root in a fresh container with no $HOME/.gitconfig from the host; without
+# this, `git commit` errors with "Author identity unknown".
+#
+# `safe.directory *` is necessary because /workspace is bind-mounted from the
+# host (owned by the host uid) and the container runs as root — git refuses
+# to operate on directories with mismatched ownership otherwise.
+RUN git config --global user.email "wizard@kodloki.io" \
+ && git config --global user.name "eloup-wizard" \
+ && git config --global --add safe.directory '*'
+
 RUN set -eux; \
     curl -fsSLo /usr/local/bin/kubectl \
         "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl"; \
