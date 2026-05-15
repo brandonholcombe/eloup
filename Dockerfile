@@ -5,6 +5,7 @@
 #   - kubectl   v1.33.0     (cluster API)
 #   - argocd    v2.13.1     (Application registration / sync)
 #   - docker    27.5.1      (CLI; daemon comes from the mounted host socket)
+#   - buildx    v0.18.0     (Docker CLI plugin; phase 5 uses it for --platform linux/amd64 --push)
 #   - kubeseal  v0.27.1     (Sealed Secrets cert fetch + encrypt for phase 6)
 #
 # Run with:
@@ -20,6 +21,7 @@ FROM --platform=linux/amd64 python:3.11-slim AS base
 ARG KUBECTL_VERSION=v1.33.0
 ARG ARGOCD_VERSION=v2.13.1
 ARG DOCKER_CLI_VERSION=27.5.1
+ARG BUILDX_VERSION=v0.18.0
 ARG KUBESEAL_VERSION=v0.27.1
 
 ENV PYTHONUNBUFFERED=1 \
@@ -50,6 +52,16 @@ RUN set -eux; \
     install -m 0755 /tmp/docker/docker /usr/local/bin/docker; \
     rm -rf /tmp/docker; \
     docker --version
+
+# buildx is a docker CLI plugin (separate binary at ~/.docker/cli-plugins/docker-buildx).
+# Phase 5 invokes `docker buildx build --platform linux/amd64 --push`; without
+# this plugin the static CLI errors out with `unknown flag: --platform`.
+RUN set -eux; \
+    mkdir -p /root/.docker/cli-plugins; \
+    curl -fsSLo /root/.docker/cli-plugins/docker-buildx \
+        "https://github.com/docker/buildx/releases/download/${BUILDX_VERSION}/buildx-${BUILDX_VERSION}.linux-amd64"; \
+    chmod 0755 /root/.docker/cli-plugins/docker-buildx; \
+    docker buildx version
 
 RUN set -eux; \
     KUBESEAL_VERSION_NO_V="${KUBESEAL_VERSION#v}"; \
