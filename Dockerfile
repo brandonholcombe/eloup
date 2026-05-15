@@ -65,5 +65,11 @@ RUN pip install --no-cache-dir -e /app/wizard
 
 WORKDIR /workspace
 
-ENTRYPOINT ["tini", "--", "python", "-m", "wizard"]
+# Use the pip-installed console-script entrypoint (not `python -m wizard`):
+# bind-mounting the operator's eloup repo to /workspace puts /workspace on
+# sys.path[0], where /workspace/wizard/ (source dir, no __init__.py) shadows
+# the installed package as a namespace package, breaking `from wizard import
+# __version__`. The console script invokes wizard.cli:main without injecting
+# cwd into sys.path.
+ENTRYPOINT ["tini", "--", "eloup-wizard"]
 CMD []
