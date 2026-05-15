@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: eloup-web
+  namespace: eloup
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-cookie-domain: "off"
+    nginx.ingress.kubernetes.io/proxy-cookie-path: "off"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "https://eloup.kodloki.io"
+    nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
+  labels:
+    app: eloup-web
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - eloup.kodloki.io
+      secretName: eloup-tls
+  rules:
+    - host: eloup.kodloki.io
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: eloup-web
+                port:
+                  number: 3000

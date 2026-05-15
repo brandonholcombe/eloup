@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: eloup-web-config
+  namespace: eloup
+  labels:
+    app: eloup-web
+data:
+  DISCORD_CLIENT_ID: "1504985018366169211"
+  APP_DOMAIN: "https://eloup.kodloki.io"
+  DATABASE_PATH: "/data/eloup.sqlite"
