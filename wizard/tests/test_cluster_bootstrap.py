@@ -139,6 +139,47 @@ def test_phase4_argocd_missing_fails_with_fix_command(
     assert ctx.state.phase("cluster_bootstrap")["status"] == "failed"
 
 
+def test_phase4_argocd_detected_via_statefulset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Argo CD v2.2+ deploys argocd-application-controller as a StatefulSet.
+
+    Regression: tow-c1 runs the StatefulSet form and the original
+    Deployment-only check returned a false-negative MISSING.
+    """
+    fk = _all_present_fake()
+    fk.responses.pop(
+        ("kubectl", "-n", "argocd", "get", "deployment", "argocd-application-controller"),
+        None,
+    )
+    fk.add(
+        ("kubectl", "-n", "argocd", "get", "statefulset", "argocd-application-controller"),
+        stdout="argocd-application-controller",
+    )
+    monkeypatch.setattr(cb.subprocess, "run", fk)
+
+    ctx = _make_ctx(tmp_path)
+    cb.ClusterBootstrapPhase().run(ctx)
+
+    assert ctx.state.phase("cluster_bootstrap")["status"] == "done"
+
+
+def test_phase4_argocd_missing_neither_deployment_nor_statefulset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fk = _all_present_fake()
+    fk.responses.pop(
+        ("kubectl", "-n", "argocd", "get", "deployment", "argocd-application-controller"),
+        None,
+    )
+    monkeypatch.setattr(cb.subprocess, "run", fk)
+
+    ctx = _make_ctx(tmp_path)
+    with pytest.raises(PhaseFailed) as exc:
+        cb.ClusterBootstrapPhase().run(ctx)
+    assert "argocd-application-controller" in str(exc.value).lower() or "ArgoCD" in str(exc.value)
+
+
 def test_phase4_storageclass_not_default_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

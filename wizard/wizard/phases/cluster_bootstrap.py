@@ -65,17 +65,24 @@ def _check_argocd() -> CheckOutcome:
             "namespace 'argocd' missing",
             fix_command="kubectl create namespace argocd && kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml",
         )
-    deploy_ok, detail = _kubectl_exists(
-        ["-n", "argocd", "get", "deployment", "argocd-application-controller"]
+    # Argo CD ≥ v2.2 deploys argocd-application-controller as a StatefulSet
+    # (shard-stable identity). Earlier versions used a Deployment. Probe both
+    # so the check works against any reasonable upstream install — tow-c1 runs
+    # the StatefulSet form.
+    last_detail = ""
+    for kind in ("statefulset", "deployment"):
+        ok, detail = _kubectl_exists(["-n", "argocd", "get", kind, "argocd-application-controller"])
+        if ok:
+            return CheckOutcome(
+                "ArgoCD", True, f"namespace + application-controller ({kind}) present"
+            )
+        last_detail = detail
+    return CheckOutcome(
+        "ArgoCD",
+        False,
+        f"argocd-application-controller not found as statefulset or deployment: {last_detail}",
+        fix_command="kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml",
     )
-    if not deploy_ok:
-        return CheckOutcome(
-            "ArgoCD",
-            False,
-            f"deployment argocd-application-controller missing: {detail}",
-            fix_command="kubectl apply -n argocd -f https://raw.githubusercontent.com/argoproj/argo-cd/stable/manifests/install.yaml",
-        )
-    return CheckOutcome("ArgoCD", True, "namespace + application-controller present")
 
 
 def _check_cert_manager() -> CheckOutcome:
