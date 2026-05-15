@@ -35,20 +35,35 @@ def rename_remote(workspace: Path, old: str, new: str) -> None:
     _run(["git", "remote", "rename", old, new], cwd=workspace)
 
 
-def ensure_remote(workspace: Path, name: str, expected_url: str) -> str:
+def set_remote_url(workspace: Path, name: str, url: str) -> None:
+    _run(["git", "remote", "set-url", name, url], cwd=workspace)
+
+
+def ensure_remote(
+    workspace: Path,
+    name: str,
+    expected_url: str,
+    *,
+    allow_update: bool = False,
+) -> str:
     """Reconcile a remote name with `expected_url`.
 
-    Returns one of: "added", "kept", "renamed_from_origin".
+    Returns one of: "added", "kept", "renamed_from_origin", "updated".
 
-    Raises GitError if the named remote already exists with a different URL,
-    or if `origin` exists pointing at `expected_url` and a different remote
-    named `name` also exists with a different URL.
+    By default, raises GitError if the named remote already exists with a
+    different URL (defensive: don't overwrite operator-managed remotes).
+    Pass `allow_update=True` to overwrite via `git remote set-url` instead
+    — used by phase 3 when embedding PATs in remote URLs, so PAT rotation
+    on re-run transparently updates the URL.
     """
     remotes = list_remotes(workspace)
 
     if name in remotes:
         if remotes[name] == expected_url:
             return "kept"
+        if allow_update:
+            set_remote_url(workspace, name, expected_url)
+            return "updated"
         raise GitError(
             f"remote {name!r} already exists with URL {remotes[name]!r}; "
             f"refusing to overwrite with {expected_url!r}"
