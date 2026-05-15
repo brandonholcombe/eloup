@@ -78,8 +78,19 @@ def test_phase3_creates_both_repos_and_remotes(tmp_path: Path, workspace: Path) 
     assert subs["gitea_repo"]["status"] == "done"
     assert subs["github_repo"]["status"] == "done"
     remotes = list_remotes(workspace)
-    assert remotes["gitea"] == pr.GITEA_REPO_URL
-    assert remotes["github"] == pr.GITHUB_REPO_URL
+    assert (
+        remotes["gitea"]
+        == "https://brandonw.h2o:gitea-test-pat@haxley.luckyenough.us/brandonw.h2o/eloup"
+    )
+    assert (
+        remotes["github"]
+        == "https://brandonholcombe:github-test-pat@github.com/brandonholcombe/eloup.git"
+    )
+    output = ctx.console.export_text()
+    assert "gitea-test-pat" not in output, "Gitea PAT leaked into console output"
+    assert "github-test-pat" not in output, "GitHub PAT leaked into console output"
+    assert pr.GITEA_REPO_URL in output
+    assert pr.GITHUB_REPO_URL in output
 
 
 @responses.activate
@@ -266,6 +277,104 @@ def test_phase3_no_existing_remote_adds_both(tmp_path: Path) -> None:
     remotes = list_remotes(ws)
     assert remotes["gitea"] == pr.GITEA_REPO_URL
     assert remotes["github"] == pr.GITHUB_REPO_URL
+
+
+@responses.activate
+def test_phase3_rotated_pat_updates_existing_remote_url(tmp_path: Path, workspace: Path) -> None:
+    """Re-running with a rotated PAT must transparently update the remote URL.
+
+    `ensure_remote(..., allow_update=True)` is the gate — without it, phase 3
+    would raise GitError because the URL with the OLD PAT does not match the
+    URL with the NEW PAT.
+    """
+    subprocess.run(
+        [
+            "git",
+            "remote",
+            "add",
+            "gitea",
+            "https://brandonw.h2o:OLD_PAT@haxley.luckyenough.us/brandonw.h2o/eloup",
+        ],
+        cwd=str(workspace),
+        check=True,
+    )
+    ctx = _make_ctx(tmp_path)
+    responses.add(
+        responses.POST,
+        "https://haxley.luckyenough.us/api/v1/user/repos",
+        json={"name": "eloup"},
+        status=201,
+    )
+    responses.add(
+        responses.POST,
+        "https://api.github.com/user/repos",
+        json={"name": "eloup"},
+        status=201,
+    )
+
+    pr.ProvisionReposPhase().run(ctx)
+
+    remotes = list_remotes(workspace)
+    assert "OLD_PAT" not in remotes["gitea"]
+    assert "gitea-test-pat" in remotes["gitea"]
+
+
+@responses.activate
+def test_phase3_pat_with_special_chars_is_url_encoded(tmp_path: Path, workspace: Path) -> None:
+    """Defensive: a PAT with `:`/`@`/`/` must be URL-encoded so the URL parses."""
+    state_dir = tmp_path / "state"
+    paths = WizardPaths(state_dir=state_dir)
+    state = WizardState.load_or_initialize(paths.state_file)
+    state.save()
+    write_secrets_file(
+        paths.secrets_file,
+        {
+            "gitea_pat": "pat:with@special/chars",
+            "github_pat": "ghp_simple",
+            "dockerhub_pat": "x",
+            "linode_pat": "x",
+            "discord_client_secret": "x",
+            "app_session_secret": "x",
+        },
+    )
+    state.set_secrets_ref(paths.secrets_file)
+    state.save()
+    from rich.console import Console
+
+    ctx = PhaseContext(
+        state=state,
+        paths=paths,
+        console=Console(record=True, width=120),
+        config_path=None,
+        generate_session=False,
+        keep=False,
+    )
+
+    responses.add(
+        responses.POST,
+        "https://haxley.luckyenough.us/api/v1/user/repos",
+        json={"name": "eloup"},
+        status=201,
+    )
+    responses.add(
+        responses.POST,
+        "https://api.github.com/user/repos",
+        json={"name": "eloup"},
+        status=201,
+    )
+
+    pr.ProvisionReposPhase().run(ctx)
+
+    remotes = list_remotes(workspace)
+    assert "pat%3Awith%40special%2Fchars" in remotes["gitea"]
+    assert ":with@special/chars@" not in remotes["gitea"]
+
+
+def test_authed_url_helper_encodes_pat() -> None:
+    from wizard.phases.provision_repos import _authed_url
+
+    url = _authed_url(host="x.example", owner="user.name", repo_path="user.name/repo", pat="a:b@c")
+    assert url == "https://user.name:a%3Ab%40c@x.example/user.name/repo"
 
 
 @responses.activate
