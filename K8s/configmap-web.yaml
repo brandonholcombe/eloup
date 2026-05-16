@@ -11,3 +11,4 @@ data:
   DATABASE_PATH: "/data/eloup.sqlite"
   AUTH_URL: "https://eloup.kodloki.io"
   AUTH_TRUST_HOST: "true"
+  ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID: "481702948146249728"
