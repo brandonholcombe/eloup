@@ -4,12 +4,14 @@ import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { getGame } from '@/lib/db/queries';
+import { checkTournamentMatchMembership, getTournamentById } from '@/lib/tournaments';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 const Body = z.object({
   gameId: z.string().min(1),
+  tournamentId: z.string().min(1).nullable().optional(),
   participants: z
     .array(
       z.object({
@@ -30,6 +32,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'invalid body', detail: parsed.error.flatten() }, { status: 400 });
   }
   const { gameId, participants } = parsed.data;
+  const tournamentId = parsed.data.tournamentId ?? null;
 
   const handle = db();
   const game = getGame(handle, gameId);
@@ -44,14 +47,37 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: 'team format requires teamLabel on every row' }, { status: 400 });
   }
 
+  const viewerId = session.user.id;
+
+  if (tournamentId) {
+    const t = getTournamentById(handle, tournamentId);
+    if (!t) return NextResponse.json({ error: 'unknown tournament' }, { status: 404 });
+    const guard = checkTournamentMatchMembership(
+      handle,
+      tournamentId,
+      viewerId,
+      participants.map((p) => p.playerId),
+    );
+    if (!guard.ok) {
+      return NextResponse.json(
+        guard.reason === 'caller_not_member'
+          ? { error: 'caller is not a tournament member' }
+          : { error: 'participant is not a tournament member', playerId: guard.offending },
+        { status: 403 },
+      );
+    }
+  }
+
   const matchId = randomUUID();
   const now = new Date().toISOString();
-  const viewerId = session.user.id;
 
   const tx = handle.transaction(() => {
     handle
-      .prepare(`INSERT INTO matches(id, game_id, created_by, status) VALUES (?, ?, ?, 'pending')`)
-      .run(matchId, gameId, viewerId);
+      .prepare(
+        `INSERT INTO matches(id, game_id, tournament_id, created_by, status)
+         VALUES (?, ?, ?, ?, 'pending')`,
+      )
+      .run(matchId, gameId, tournamentId, viewerId);
     const insertRow = handle.prepare(
       `INSERT INTO match_participants(match_id, player_id, team_label, placement, confirmed_at)
        VALUES (?, ?, ?, ?, ?)`,

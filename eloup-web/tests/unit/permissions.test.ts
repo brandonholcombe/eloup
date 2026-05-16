@@ -4,7 +4,13 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyMigrations } from '@/lib/db/migrate';
-import { canConfirmRow, canCreateGame, canEditMatch } from '@/lib/permissions';
+import {
+  canConfirmRow,
+  canCreateGame,
+  canEditMatch,
+  isTournamentAdmin,
+  isTournamentMember,
+} from '@/lib/permissions';
 
 function freshDb() {
   const dir = mkdtempSync(join(tmpdir(), 'eloup-perm-'));
@@ -45,6 +51,24 @@ function seedRow(
   ).run(matchId, playerId, confirmedAt);
 }
 
+function seedTournament(db: Database.Database, id: string, ownerId: string) {
+  db.prepare(
+    `INSERT INTO tournaments(id, name, slug, owner_id, format) VALUES (?, ?, ?, ?, 'named_group')`,
+  ).run(id, id, id, ownerId);
+}
+
+function seedTournamentMember(db: Database.Database, tournamentId: string, playerId: string) {
+  db.prepare(
+    `INSERT INTO tournament_members(tournament_id, player_id) VALUES (?, ?)`,
+  ).run(tournamentId, playerId);
+}
+
+function seedTournamentAdmin(db: Database.Database, tournamentId: string, playerId: string) {
+  db.prepare(
+    `INSERT INTO tournament_admins(tournament_id, player_id) VALUES (?, ?)`,
+  ).run(tournamentId, playerId);
+}
+
 describe('canCreateGame', () => {
   it('global_admin → true', () => {
     expect(canCreateGame({ id: 'a', role: 'global_admin' })).toBe(true);
@@ -59,13 +83,109 @@ describe('canCreateGame', () => {
 
 describe('canEditMatch', () => {
   it('global_admin can edit any match', () => {
-    expect(canEditMatch({ id: 'admin', role: 'global_admin' }, 'someone-else')).toBe(true);
+    const db = freshDb();
+    expect(
+      canEditMatch(db, { id: 'admin', role: 'global_admin' }, {
+        created_by: 'someone-else',
+        tournament_id: null,
+      }),
+    ).toBe(true);
+    db.close();
   });
   it('creator can edit own match', () => {
-    expect(canEditMatch({ id: 'a', role: 'user' }, 'a')).toBe(true);
+    const db = freshDb();
+    expect(
+      canEditMatch(db, { id: 'a', role: 'user' }, { created_by: 'a', tournament_id: null }),
+    ).toBe(true);
+    db.close();
   });
   it('user cannot edit other users matches', () => {
-    expect(canEditMatch({ id: 'a', role: 'user' }, 'b')).toBe(false);
+    const db = freshDb();
+    expect(
+      canEditMatch(db, { id: 'a', role: 'user' }, { created_by: 'b', tournament_id: null }),
+    ).toBe(false);
+    db.close();
+  });
+  it('tournament admin can edit a match scoped to their tournament', () => {
+    const db = freshDb();
+    seedPlayer(db, 'admin');
+    seedPlayer(db, 'creator');
+    seedTournament(db, 't1', 'creator');
+    seedTournamentAdmin(db, 't1', 'admin');
+    expect(
+      canEditMatch(db, { id: 'admin', role: 'user' }, {
+        created_by: 'creator',
+        tournament_id: 't1',
+      }),
+    ).toBe(true);
+    db.close();
+  });
+  it('tournament admin cannot edit a match scoped to a different tournament', () => {
+    const db = freshDb();
+    seedPlayer(db, 'admin');
+    seedPlayer(db, 'creator');
+    seedTournament(db, 't1', 'creator');
+    seedTournament(db, 't2', 'creator');
+    seedTournamentAdmin(db, 't1', 'admin');
+    expect(
+      canEditMatch(db, { id: 'admin', role: 'user' }, {
+        created_by: 'creator',
+        tournament_id: 't2',
+      }),
+    ).toBe(false);
+    db.close();
+  });
+});
+
+describe('isTournamentMember', () => {
+  it('true when the membership row exists', () => {
+    const db = freshDb();
+    seedPlayer(db, 'a');
+    seedTournament(db, 't1', 'a');
+    seedTournamentMember(db, 't1', 'a');
+    expect(isTournamentMember(db, 'a', 't1')).toBe(true);
+    db.close();
+  });
+  it('false when no row exists', () => {
+    const db = freshDb();
+    seedPlayer(db, 'a');
+    seedPlayer(db, 'b');
+    seedTournament(db, 't1', 'a');
+    expect(isTournamentMember(db, 'b', 't1')).toBe(false);
+    db.close();
+  });
+});
+
+describe('isTournamentAdmin', () => {
+  it('true when in tournament_admins', () => {
+    const db = freshDb();
+    seedPlayer(db, 'a');
+    seedTournament(db, 't1', 'a');
+    seedTournamentAdmin(db, 't1', 'a');
+    expect(isTournamentAdmin(db, { id: 'a', role: 'user' }, 't1')).toBe(true);
+    db.close();
+  });
+  it('true for any global_admin regardless of row presence', () => {
+    const db = freshDb();
+    seedPlayer(db, 'admin', 'global_admin');
+    seedPlayer(db, 'creator');
+    seedTournament(db, 't1', 'creator');
+    expect(isTournamentAdmin(db, { id: 'admin', role: 'global_admin' }, 't1')).toBe(true);
+    db.close();
+  });
+  it('false for a member who is not an admin', () => {
+    const db = freshDb();
+    seedPlayer(db, 'a');
+    seedPlayer(db, 'b');
+    seedTournament(db, 't1', 'a');
+    seedTournamentMember(db, 't1', 'b');
+    expect(isTournamentAdmin(db, { id: 'b', role: 'user' }, 't1')).toBe(false);
+    db.close();
+  });
+  it('false for a null session', () => {
+    const db = freshDb();
+    expect(isTournamentAdmin(db, null, 't1')).toBe(false);
+    db.close();
   });
 });
 

@@ -11,7 +11,7 @@ function tempDbPath(): string {
 }
 
 describe('applyMigrations', () => {
-  it('creates all M4 tables on a fresh DB and records version 1', () => {
+  it('creates all tables on a fresh DB and records every migration version', () => {
     const path = tempDbPath();
     const db = new Database(path);
     db.pragma('foreign_keys = ON');
@@ -39,10 +39,10 @@ describe('applyMigrations', () => {
       ]),
     );
 
-    const versions = db.prepare('SELECT version FROM schema_migrations').all() as {
+    const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as {
       version: number;
     }[];
-    expect(versions.map((v) => v.version)).toEqual([1]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2]);
     db.close();
   });
 
@@ -51,11 +51,14 @@ describe('applyMigrations', () => {
     const db = new Database(path);
     db.pragma('foreign_keys = ON');
     applyMigrations(db);
-    applyMigrations(db);
-    const versions = db.prepare('SELECT version FROM schema_migrations').all() as {
+    const before = db.prepare('SELECT version FROM schema_migrations').all() as {
       version: number;
     }[];
-    expect(versions).toHaveLength(1);
+    applyMigrations(db);
+    const after = db.prepare('SELECT version FROM schema_migrations').all() as {
+      version: number;
+    }[];
+    expect(after).toEqual(before);
     db.close();
   });
 

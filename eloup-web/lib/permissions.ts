@@ -7,14 +7,25 @@ export type SessionPlayer = {
   role: Role;
 };
 
+export type MatchForEdit = {
+  created_by: string;
+  tournament_id: string | null;
+};
+
 export function canCreateGame(s: SessionPlayer | null): boolean {
   return s?.role === 'global_admin';
 }
 
-export function canEditMatch(s: SessionPlayer | null, matchCreatedBy: string): boolean {
+export function canEditMatch(
+  db: Database.Database,
+  s: SessionPlayer | null,
+  match: MatchForEdit,
+): boolean {
   if (!s) return false;
   if (s.role === 'global_admin') return true;
-  return s.id === matchCreatedBy;
+  if (s.id === match.created_by) return true;
+  if (match.tournament_id && isTournamentAdmin(db, s, match.tournament_id)) return true;
+  return false;
 }
 
 export function canConfirmRow(
@@ -28,4 +39,32 @@ export function canConfirmRow(
     .get(matchId, s.id) as { confirmed_at: string | null } | undefined;
   if (!row) return false;
   return row.confirmed_at == null;
+}
+
+export function isTournamentMember(
+  db: Database.Database,
+  playerId: string,
+  tournamentId: string,
+): boolean {
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok FROM tournament_members WHERE tournament_id = ? AND player_id = ?`,
+    )
+    .get(tournamentId, playerId) as { ok: number } | undefined;
+  return !!row;
+}
+
+export function isTournamentAdmin(
+  db: Database.Database,
+  s: SessionPlayer | null,
+  tournamentId: string,
+): boolean {
+  if (!s) return false;
+  if (s.role === 'global_admin') return true;
+  const row = db
+    .prepare(
+      `SELECT 1 AS ok FROM tournament_admins WHERE tournament_id = ? AND player_id = ?`,
+    )
+    .get(tournamentId, s.id) as { ok: number } | undefined;
+  return !!row;
 }
