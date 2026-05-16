@@ -27,16 +27,16 @@ ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
     PORT=3000 \
     HOSTNAME=0.0.0.0
+# The node base image already ships a `node` user at UID/GID 1000 — reuse
+# it instead of creating another at the same UID (matches K8s securityContext
+# runAsUser: 1000 + fsGroup: 1000).
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates tini \
- && rm -rf /var/lib/apt/lists/* \
- && groupadd -g 1000 app \
- && useradd -u 1000 -g 1000 -m -d /home/app app
-COPY --from=build --chown=1000:1000 /app/.next/standalone ./
-COPY --from=build --chown=1000:1000 /app/.next/static ./.next/static
-COPY --from=build --chown=1000:1000 /app/public ./public
-COPY --from=build --chown=1000:1000 /app/lib/db/migrations ./lib/db/migrations
-# better-sqlite3 native binding lives inside .next/standalone/node_modules
-USER 1000:1000
+ && rm -rf /var/lib/apt/lists/*
+COPY --from=build --chown=node:node /app/.next/standalone ./
+COPY --from=build --chown=node:node /app/.next/static ./.next/static
+COPY --from=build --chown=node:node /app/public ./public
+COPY --from=build --chown=node:node /app/lib/db/migrations ./lib/db/migrations
+USER node
 EXPOSE 3000
 ENTRYPOINT ["tini", "--", "node", "server.js"]
