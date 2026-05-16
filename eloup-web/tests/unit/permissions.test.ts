@@ -8,6 +8,7 @@ import {
   canConfirmRow,
   canCreateGame,
   canEditMatch,
+  canForceConfirmMatch,
   isTournamentAdmin,
   isTournamentMember,
 } from '@/lib/permissions';
@@ -224,6 +225,75 @@ describe('canConfirmRow', () => {
   it('returns false for anonymous (null) session', () => {
     const db = freshDb();
     expect(canConfirmRow(db, null, 'm')).toBe(false);
+    db.close();
+  });
+});
+
+describe('canForceConfirmMatch', () => {
+  it('global_admin can force any match (no tournament)', () => {
+    const db = freshDb();
+    expect(
+      canForceConfirmMatch(db, { id: 'admin', role: 'global_admin' }, { tournament_id: null }),
+    ).toBe(true);
+    db.close();
+  });
+
+  it('global_admin can force a tournament match they are not member of', () => {
+    const db = freshDb();
+    expect(
+      canForceConfirmMatch(db, { id: 'admin', role: 'global_admin' }, { tournament_id: 't1' }),
+    ).toBe(true);
+    db.close();
+  });
+
+  it('tournament_admin can force matches in their tournament', () => {
+    const db = freshDb();
+    seedPlayer(db, 'tadmin', 'user');
+    db.prepare(
+      `INSERT INTO tournaments(id, name, slug, owner_id) VALUES ('t1', 'T1', 't1', 'tadmin')`,
+    ).run();
+    db.prepare(`INSERT INTO tournament_admins(tournament_id, player_id) VALUES ('t1', 'tadmin')`).run();
+    expect(
+      canForceConfirmMatch(db, { id: 'tadmin', role: 'tournament_admin' }, { tournament_id: 't1' }),
+    ).toBe(true);
+    db.close();
+  });
+
+  it('tournament_admin CANNOT force matches outside their tournament', () => {
+    const db = freshDb();
+    seedPlayer(db, 'tadmin', 'user');
+    db.prepare(
+      `INSERT INTO tournaments(id, name, slug, owner_id) VALUES ('t1', 'T1', 't1', 'tadmin')`,
+    ).run();
+    db.prepare(`INSERT INTO tournament_admins(tournament_id, player_id) VALUES ('t1', 'tadmin')`).run();
+    expect(
+      canForceConfirmMatch(db, { id: 'tadmin', role: 'tournament_admin' }, { tournament_id: 't2' }),
+    ).toBe(false);
+    db.close();
+  });
+
+  it('tournament_admin CANNOT force casual (non-tournament) matches', () => {
+    const db = freshDb();
+    expect(
+      canForceConfirmMatch(
+        db,
+        { id: 'tadmin', role: 'tournament_admin' },
+        { tournament_id: null },
+      ),
+    ).toBe(false);
+    db.close();
+  });
+
+  it('regular user cannot force any match', () => {
+    const db = freshDb();
+    expect(canForceConfirmMatch(db, { id: 'u', role: 'user' }, { tournament_id: null })).toBe(false);
+    expect(canForceConfirmMatch(db, { id: 'u', role: 'user' }, { tournament_id: 't1' })).toBe(false);
+    db.close();
+  });
+
+  it('anonymous session cannot force', () => {
+    const db = freshDb();
+    expect(canForceConfirmMatch(db, null, { tournament_id: null })).toBe(false);
     db.close();
   });
 });

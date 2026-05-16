@@ -35,6 +35,20 @@ export function canEditMatch(
   return false;
 }
 
+// Force-confirm a pending match without requiring all participants' consent.
+// global_admin can force any match anywhere. tournament_admin can force any
+// match in their tournament. Regular users never can.
+export function canForceConfirmMatch(
+  db: Database.Database,
+  s: SessionPlayer | null,
+  match: { tournament_id: string | null },
+): boolean {
+  if (!s) return false;
+  if (s.role === 'global_admin') return true;
+  if (match.tournament_id && isTournamentAdmin(db, s, match.tournament_id)) return true;
+  return false;
+}
+
 export function canConfirmRow(
   db: Database.Database,
   s: SessionPlayer | null,

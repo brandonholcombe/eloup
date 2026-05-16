@@ -10,6 +10,12 @@ export type ConfirmResult =
   | { status: 'already_confirmed' }
   | { status: 'no_row' };
 
+export type ForceConfirmResult =
+  | { status: 'confirmed'; deltas: Map<string, { perGame: number; overall: number }> }
+  | { status: 'already_confirmed' }
+  | { status: 'no_match' }
+  | { status: 'not_pending'; current: string };
+
 type ParticipantRow = {
   player_id: string;
   team_label: string | null;
@@ -30,6 +36,38 @@ type GameRow = {
   default_k: number;
   format: Format;
 };
+
+// Admin override: fills in any unconfirmed match_participants rows with `now`
+// and runs the same ELO transaction the last-confirmer path runs. Caller MUST
+// have permission-checked the actor (global_admin OR tournament_admin of the
+// match's tournament) — this function does not re-check authorization.
+export function forceConfirmMatch(
+  db: Database.Database,
+  matchId: string,
+  nowIso: () => string = () => new Date().toISOString(),
+): ForceConfirmResult {
+  const tx = db.transaction((): ForceConfirmResult => {
+    const m = db.prepare(`SELECT status FROM matches WHERE id = ?`).get(matchId) as
+      | { status: string }
+      | undefined;
+    if (!m) return { status: 'no_match' };
+    if (m.status === 'confirmed') return { status: 'already_confirmed' };
+    if (m.status !== 'pending') return { status: 'not_pending', current: m.status };
+
+    db.prepare(
+      `UPDATE match_participants SET confirmed_at = ? WHERE match_id = ? AND confirmed_at IS NULL`,
+    ).run(nowIso(), matchId);
+
+    const result = applyEloUpdate(db, matchId, nowIso);
+    if (result.status !== 'confirmed') {
+      throw new Error(
+        `applyEloUpdate returned ${result.status} after force-confirm filled rows`,
+      );
+    }
+    return result;
+  });
+  return tx.immediate();
+}
 
 export function confirmRow(
   db: Database.Database,

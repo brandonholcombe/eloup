@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { ConfirmRowButton } from '@/components/ConfirmRowButton';
+import { AdminForceConfirmButton } from '@/components/AdminForceConfirmButton';
+import { canForceConfirmMatch, type SessionPlayer } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,11 +31,17 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const handle = db();
   const match = handle
     .prepare(
-      `SELECT m.id, g.name AS game_name, m.status, m.created_at
+      `SELECT m.id, g.name AS game_name, m.status, m.created_at, m.tournament_id
          FROM matches m JOIN games g ON g.id = m.game_id WHERE m.id = ?`,
     )
-    .get(id) as MatchHeader | undefined;
+    .get(id) as (MatchHeader & { tournament_id: string | null }) | undefined;
   if (!match) notFound();
+  const sp: SessionPlayer | null = session?.user
+    ? { id: session.user.id, role: session.user.role }
+    : null;
+  const canAdminForce =
+    match.status === 'pending' &&
+    canForceConfirmMatch(handle, sp, { tournament_id: match.tournament_id });
   const rows = handle
     .prepare(
       `SELECT mp.player_id, p.display_name, p.discord_handle, mp.team_label, mp.placement,
@@ -85,6 +93,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           );
         })}
       </ul>
+      {canAdminForce && <AdminForceConfirmButton matchId={match.id} />}
     </main>
   );
 }
