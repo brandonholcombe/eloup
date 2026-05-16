@@ -123,6 +123,8 @@ class GenerateManifestsPhase:
         config = ctx.state.data.get("config", {})
         app_domain = config.get("app_domain") or "eloup.kodloki.io"
         discord_client_id = config.get("discord_client_id") or ""
+        raw_bootstrap = config.get("bootstrap_admin_discord_id")
+        bootstrap_admin_discord_id = (str(raw_bootstrap).strip() if raw_bootstrap else None) or None
 
         cert_path_str = config.get("sealed_secrets_cert_path")
         controller_ns = config.get("sealed_secrets_namespace")
@@ -171,6 +173,7 @@ class GenerateManifestsPhase:
                 render_configmap(
                     discord_client_id=discord_client_id,
                     app_domain=app_domain,
+                    bootstrap_admin_discord_id=bootstrap_admin_discord_id,
                 ),
             ),
             (K8S_DIR / "service-web.yaml", render_service()),

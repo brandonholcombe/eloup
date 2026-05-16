@@ -15,6 +15,7 @@ CONFIG_FIELDS: tuple[str, ...] = (
     "discord_client_id",
     "app_domain",
     "cert_email",
+    "bootstrap_admin_discord_id",
 )
 
 SECRET_FIELDS: tuple[str, ...] = (
@@ -35,8 +36,9 @@ class CollectedConfig:
     discord_client_id: str
     app_domain: str
     cert_email: str
+    bootstrap_admin_discord_id: str | None = None
 
-    def to_dict(self) -> dict[str, str]:
+    def to_dict(self) -> dict[str, str | None]:
         return asdict(self)
 
 

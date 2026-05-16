@@ -65,7 +65,21 @@ metadata:
 """
 
 
-def render_configmap(*, discord_client_id: str, app_domain: str) -> str:
+def render_configmap(
+    *,
+    discord_client_id: str,
+    app_domain: str,
+    bootstrap_admin_discord_id: str | None = None,
+) -> str:
+    # bootstrap_admin_discord_id is optional. Omit the key entirely (rather than
+    # emit `: ""`) when unset — eloup-web's lib/env.ts declares it as
+    # z.string().optional(), so absent maps to undefined in the validated Env
+    # and bootstrapPlayer's `bootstrapAdminDiscordId && ...` guard no-ops.
+    bootstrap_line = (
+        f'\n  ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID: "{bootstrap_admin_discord_id}"'
+        if bootstrap_admin_discord_id
+        else ""
+    )
     return f"""\
 apiVersion: v1
 kind: ConfigMap
@@ -79,7 +93,7 @@ data:
   APP_DOMAIN: "https://{app_domain}"
   DATABASE_PATH: "{DATABASE_PATH}"
   AUTH_URL: "https://{app_domain}"
-  AUTH_TRUST_HOST: "true"
+  AUTH_TRUST_HOST: "true"{bootstrap_line}
 """
 
 

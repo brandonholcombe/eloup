@@ -351,3 +351,79 @@ def test_phase6_secret_keys_are_uppercase_env_var_shape(tmp_path: Path, workspac
 
 def test_repo_secret_constants_exposed() -> None:
     assert REPO_SECRET_NAME == "eloup-repo"
+
+
+def test_phase6_configmap_emits_bootstrap_admin_when_set(tmp_path: Path, workspace: Path) -> None:
+    # H1 regression guard: M4 reads ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID to promote
+    # the first matching Discord login to global_admin. The wizard must surface
+    # the value into the ConfigMap so a fresh-cluster deploy gets auto-promotion
+    # without an out-of-band `kubectl set env`.
+    ctx = _make_ctx(tmp_path)
+    ctx.state.update_config({"bootstrap_admin_discord_id": "481702948146249728"})
+    ctx.state.save()
+    with patch.object(gm.subprocess, "run", return_value=_stub_kubeseal_success()):
+        gm.GenerateManifestsPhase().run(ctx)
+
+    cm = yaml.safe_load((workspace / "K8s/configmap-web.yaml").read_text())
+    assert cm["data"]["ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID"] == "481702948146249728"
+
+
+def test_phase6_configmap_omits_bootstrap_admin_when_unset(tmp_path: Path, workspace: Path) -> None:
+    # When the operator leaves bootstrap_admin_discord_id blank, the ConfigMap
+    # must omit the key entirely — emitting `: ""` would defeat M4 env.ts's
+    # `z.string().optional()` discrimination between absent and empty.
+    ctx = _make_ctx(tmp_path)
+    with patch.object(gm.subprocess, "run", return_value=_stub_kubeseal_success()):
+        gm.GenerateManifestsPhase().run(ctx)
+
+    cm_text = (workspace / "K8s/configmap-web.yaml").read_text()
+    assert "ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in cm_text
+    cm = yaml.safe_load(cm_text)
+    assert "ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in cm["data"]
+    assert set(cm["data"].keys()) == {
+        "DISCORD_CLIENT_ID",
+        "APP_DOMAIN",
+        "DATABASE_PATH",
+        "AUTH_URL",
+        "AUTH_TRUST_HOST",
+    }
+
+
+def test_phase6_configmap_treats_empty_string_as_unset(tmp_path: Path, workspace: Path) -> None:
+    # YAML `bootstrap_admin_discord_id: ""` must normalize to omitted. Reviewer
+    # flagged this as the failure mode if `_from_yaml_only` ever used a plain
+    # `data.get(...)` instead of `... or None`.
+    ctx = _make_ctx(tmp_path)
+    ctx.state.update_config({"bootstrap_admin_discord_id": ""})
+    ctx.state.save()
+    with patch.object(gm.subprocess, "run", return_value=_stub_kubeseal_success()):
+        gm.GenerateManifestsPhase().run(ctx)
+
+    cm_text = (workspace / "K8s/configmap-web.yaml").read_text()
+    assert "ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in cm_text
+
+
+def test_render_configmap_omits_key_for_none_and_empty_string() -> None:
+    # Pure-function boundary test: locks omit-vs-empty behavior at the renderer
+    # rather than only at the phase. Guards against a future regression where
+    # someone "fixes" the renderer to always emit the key.
+    from wizard.phases._manifests import render_configmap
+
+    none_out = render_configmap(
+        discord_client_id="x", app_domain="y", bootstrap_admin_discord_id=None
+    )
+    empty_out = render_configmap(
+        discord_client_id="x", app_domain="y", bootstrap_admin_discord_id=""
+    )
+    set_out = render_configmap(
+        discord_client_id="x", app_domain="y", bootstrap_admin_discord_id="123"
+    )
+
+    assert "ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in none_out
+    assert "ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in empty_out
+    assert 'ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID: "123"' in set_out
+
+    # Default-arg case (existing call sites that don't pass the kwarg) keeps
+    # the M3 ConfigMap contract — guards against an accidental positional bug.
+    default_out = render_configmap(discord_client_id="x", app_domain="y")
+    assert "ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in default_out

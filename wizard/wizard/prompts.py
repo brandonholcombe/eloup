@@ -40,6 +40,11 @@ def _interactive_collect(
     discord_client_secret = ask("discord_client_secret", "Discord OAuth client secret", hide=True)
     app_domain = ask("app_domain", "App domain", default=DEFAULT_APP_DOMAIN)
     cert_email = ask("cert_email", "cert-manager email", default=DEFAULT_CERT_EMAIL)
+    bootstrap_admin_discord_id_raw = ask(
+        "bootstrap_admin_discord_id",
+        "Bootstrap admin Discord ID (snowflake; blank = no auto-promotion)",
+        default="",
+    )
 
     if "app_session_secret" in pre and pre["app_session_secret"]:
         app_session_secret = str(pre["app_session_secret"])
@@ -62,6 +67,7 @@ def _interactive_collect(
         discord_client_id=discord_client_id,
         app_domain=app_domain,
         cert_email=cert_email,
+        bootstrap_admin_discord_id=(bootstrap_admin_discord_id_raw.strip() or None),
     )
     secrets = CollectedSecrets(
         dockerhub_pat=dockerhub_pat,
@@ -75,17 +81,20 @@ def _interactive_collect(
 
 
 def _from_yaml_only(data: dict[str, Any]) -> tuple[CollectedConfig, CollectedSecrets]:
-    missing = [f for f in CONFIG_FIELDS if f not in data]
+    missing = [f for f in CONFIG_FIELDS if f not in data and f != "bootstrap_admin_discord_id"]
     missing += [f for f in SECRET_FIELDS if f not in data and f != "app_session_secret"]
     if missing:
         raise click.UsageError(
             "non-interactive --config is missing required keys: " + ", ".join(missing)
         )
+    raw_bootstrap = data.get("bootstrap_admin_discord_id")
+    bootstrap = str(raw_bootstrap).strip() if raw_bootstrap else None
     config = CollectedConfig(
         dockerhub_user=str(data["dockerhub_user"]),
         discord_client_id=str(data["discord_client_id"]),
         app_domain=str(data.get("app_domain") or DEFAULT_APP_DOMAIN),
         cert_email=str(data.get("cert_email") or DEFAULT_CERT_EMAIL),
+        bootstrap_admin_discord_id=(bootstrap or None),
     )
     session_secret = data.get("app_session_secret") or generate_session_secret()
     secrets = CollectedSecrets(
