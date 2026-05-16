@@ -20,7 +20,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: eloup-web
-          image: grafana/grafana:latest
+          image: bholcombe/eloup-web:14534dac62706eaef6e5a01bf0878a8788c5b791-dirty
           imagePullPolicy: Always
           ports:
             - name: http
@@ -35,14 +35,16 @@ spec:
             - name: data
               mountPath: /data
           livenessProbe:
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
             initialDelaySeconds: 30
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            tcpSocket:
+            httpGet:
+              path: /api/health
               port: 3000
             initialDelaySeconds: 10
             periodSeconds: 5
