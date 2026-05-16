@@ -238,6 +238,17 @@ Server action `createTournament`:
    All four in one `db.transaction`.
 5. Return `{id, slug}`. Client redirects to `/tournaments/[slug]`.
 
+**TOCTOU race on slug.** Two concurrent creates with the same name
+both pre-compute the same slug, both see no collision, then race the
+INSERT. SQLite's `UNIQUE` constraint guarantees one of them fails
+with `SqliteError.code === 'SQLITE_CONSTRAINT_UNIQUE'`. The
+`createTournament` helper catches that error and re-enters the
+slugify loop with the next suffix (`-2`, then `-3`, ...). A bounded
+retry of 5 attempts is enough — beyond that, surface a 409 with
+`"slug exhausted, try a different name"`. The retry happens
+*inside* the transaction's catch, so partial inserts roll back
+cleanly between attempts.
+
 ### Flow 2 — Generate and share an invite link
 
 Alice is now on `/tournaments/spring-cornhole-2026`. As an admin, she
@@ -262,10 +273,14 @@ post-auth. `/tournaments/join/[token]`:
 
 1. `assertSignedIn()`.
 2. `tournament = consumeInvite(token, viewerId)`.
-3. `consumeInvite`:
-   - `SELECT id FROM tournaments WHERE invite_token = ?` (partial index
-     scan).
-   - If no row: render "Invite is no longer valid" page (HTTP 410).
+3. `consumeInvite(token, playerId)` — signature
+   `(db, token: string, playerId: string) => Tournament | { status: 'invalid_token' }`:
+   - `SELECT id, name, slug, ... FROM tournaments WHERE invite_token = ?`
+     (partial index scan; NULL tokens never match, so revoked tokens
+     fail this lookup).
+   - If no row: return `{ status: 'invalid_token' }`. The
+     `/tournaments/join/[token]` handler maps this to an HTTP 410
+     response and renders "Invite is no longer valid".
    - `INSERT OR IGNORE INTO tournament_members(tournament_id, player_id)
      VALUES (?, ?)` — idempotent: already-a-member is a success path.
    - Return the tournament row.
@@ -362,8 +377,19 @@ export function canEditMatch(
 
 The original `canEditMatch(s, matchCreatedBy)` signature changes to
 take the match row instead of just `created_by` so the
-tournament-admin path can fire. M4 callers (just `/matches/[id]`
-edit gates, if any — verify in implementation) are updated in commit 3.
+tournament-admin path can fire. **No production callers exist** in
+`eloup-web/app/` or `eloup-web/components/` (the match detail page
+makes no edit-gate calls). The only callers are three lines in
+`tests/unit/permissions.test.ts`:
+
+- Line 62: `canEditMatch({ id: 'admin', role: 'global_admin' }, 'someone-else')` → pass `{ created_by: 'someone-else', tournament_id: null }`.
+- Line 65: `canEditMatch({ id: 'a', role: 'user' }, 'a')` → pass `{ created_by: 'a', tournament_id: null }`.
+- Line 68: `canEditMatch({ id: 'a', role: 'user' }, 'b')` → pass `{ created_by: 'b', tournament_id: null }`.
+
+All three updates land in commit 3. Without them, `pnpm typecheck`
+and `pnpm test` fail at compile time even though no runtime behavior
+changes. Both new and existing `canEditMatch` tests run against the
+new signature.
 
 | Action | Helper called |
 |---|---|
@@ -392,18 +418,26 @@ SELECT
   COUNT(CASE WHEN mp.placement = 1 THEN 1 END) AS wins,
   COUNT(mp.match_id)                            AS matches_played
 FROM tournament_members tm
-JOIN players p          ON p.id = tm.player_id
+JOIN players p              ON p.id = tm.player_id
 LEFT JOIN overall_ratings o ON o.player_id = tm.player_id
-LEFT JOIN match_participants mp
-       ON mp.player_id = tm.player_id
 LEFT JOIN matches m
-       ON m.id = mp.match_id
-      AND m.tournament_id = tm.tournament_id
+       ON m.tournament_id = tm.tournament_id
       AND m.status = 'confirmed'
+LEFT JOIN match_participants mp
+       ON mp.match_id  = m.id
+      AND mp.player_id = tm.player_id
 WHERE tm.tournament_id = ?
 GROUP BY p.id, p.display_name, p.avatar_url, o.current_rating
 ORDER BY wins DESC, matches_played ASC, overall_rating DESC, p.display_name ASC;
 ```
+
+The join order matters and is **not** symmetric: `matches m` must be the
+outer LEFT JOIN (filtered to the tournament + status), and
+`match_participants mp` must join *through* it on
+`mp.match_id = m.id AND mp.player_id = tm.player_id`. The intuitive
+"join mp first, then narrow with m" structure causes casual
+(non-tournament) match rows to leak into `wins` and `matches_played`
+— verified broken with a `better-sqlite3` repro during review.
 
 A "win" is `placement = 1`. Team formats use placement-by-team-rank
 (every member of the winning team has `placement = 1`), so team
@@ -429,7 +463,9 @@ current-viewer row when out-of-view.
 
 ## Test plan
 
-Target: ~12 new Vitest tests added to the M4 base of 35, ending at ~47.
+Target: ~14 new Vitest tests added to the M4 base of 35, ending at ~49
+(two test cases added during review: the slug TOCTOU retry path and
+the HTTP-410-on-revoked-token path).
 
 ### Unit (`tests/unit/`)
 
@@ -451,6 +487,9 @@ Target: ~12 new Vitest tests added to the M4 base of 35, ending at ~47.
 - `slugify('Spring Cornhole 2026!')` → `'spring-cornhole-2026'`.
 - Collision retry: when `spring-cornhole-2026` exists, the next call
   returns `'spring-cornhole-2026-2'`.
+- TOCTOU catch path: a stubbed insert that throws
+  `SQLITE_CONSTRAINT_UNIQUE` on the first attempt causes the helper
+  to retry with the `-2` suffix and succeed.
 
 ### Integration (`tests/integration/`)
 
@@ -465,6 +504,11 @@ Target: ~12 new Vitest tests added to the M4 base of 35, ending at ~47.
   consume is idempotent (no duplicate row error).
 - Revoked invite: after `revokeInvite`, the token returns
   `{status: 'invalid_token'}` from `consumeInvite`.
+- Revoked-invite HTTP path: a GET to the `/tournaments/join/[token]`
+  route handler (invoked directly, not via Playwright) with a
+  revoked token returns HTTP 410 and does not insert a
+  `tournament_members` row. Closes the gap between the
+  library-level invariant and the user-visible failure mode.
 - Promote + demote: Alice promotes Bob, `tournament_admins` row exists,
   demote removes it.
 - Creator protection: demoting the creator throws; demoting via a
@@ -588,8 +632,8 @@ Every commit ends with
 1. `python3 scripts/align.py check` exits 0.
 2. `cd wizard && python3 -m pytest -q` still passes — M5 should not
    touch the wizard at all. If it does, that's a regression.
-3. `cd eloup-web && pnpm test` — Vitest passes. Expected: 47 tests
-   total (M4's 35 + ~12 new).
+3. `cd eloup-web && pnpm test` — Vitest passes. Expected: ~49 tests
+   total (M4's 35 + ~14 new).
 4. `cd eloup-web && pnpm lint && pnpm typecheck` clean.
 5. `cd eloup-web && pnpm build` succeeds.
 6. `docker build -t eloup-web-m5-test eloup-web/` succeeds.
@@ -672,3 +716,85 @@ Document at the bottom of this doc:
 4. **Tournament-scoped leaderboard view in the global leaderboards
    page.** Out of scope for M5; the tournament's detail page is the
    only place per-tournament standings render today.
+
+---
+
+## Resolved review notes
+
+The independent review at
+`Agents/Review-reports/m5-tournaments-review.md` (verdict:
+APPROVE WITH CHANGES) produced the following amendments to this plan.
+Each item names the finding and the section that was edited.
+
+1. **[MAJOR #1] Standings SQL overcounted casual matches.** The
+   `match_participants` LEFT JOIN was anchored to `tm.player_id`
+   independently of `matches`, so every confirmed match the player
+   ever played counted toward the tournament's wins and
+   matches_played. Verified broken with a `better-sqlite3` repro
+   during review. §"Standings algorithm" now uses the corrected join
+   order: `matches m` is the outer LEFT JOIN (filtered to the
+   tournament + `status = 'confirmed'`), and `match_participants mp`
+   joins *through* it on `mp.match_id = m.id AND mp.player_id =
+   tm.player_id`. A note below the SQL warns that the order is not
+   symmetric — the intuitive "join mp first" structure was the
+   defect.
+
+2. **[MAJOR #2] `canEditMatch` signature change had no enumerated
+   callers.** The original plan said "verify in implementation,"
+   which would have silently broken `pnpm typecheck` /
+   `pnpm test` at compile time because three existing call sites in
+   `tests/unit/permissions.test.ts` (lines 62/65/68) pass
+   `matchCreatedBy` as a bare string. The §"Permissions extensions"
+   section now lists those three lines explicitly and specifies the
+   exact replacement shape. There are no production callers in
+   `app/` or `components/` — the new signature is test-only break,
+   but it's still a build-breaker without the test updates.
+
+3. **[MINOR #3] Slug TOCTOU race had no plan-level mitigation.** Two
+   concurrent creates with the same name could both pre-compute the
+   same slug, both find it absent, then race the INSERT. SQLite's
+   UNIQUE constraint guarantees one fails with
+   `SQLITE_CONSTRAINT_UNIQUE`. The plan now specifies that
+   `createTournament` catches that error, re-enters the slugify loop
+   inside the transaction's catch, and bounds retries to 5 before
+   surfacing a 409. A new test case in `slug.test.ts` exercises the
+   catch path with a stubbed insert that throws on the first
+   attempt.
+
+4. **[MINOR #4] No test covered the HTTP-410 surface of a revoked
+   invite token.** The integration test plan checked the data-layer
+   invariant (`consumeInvite` returns `{status: 'invalid_token'}`)
+   but not the user-visible failure mode — the
+   `/tournaments/join/[token]` route handler's HTTP 410 response.
+   The test plan now includes one additional integration test that
+   invokes the route handler directly with a revoked token and
+   asserts both the 410 status and the absence of a
+   `tournament_members` insert.
+
+5. **[NIT #5] `consumeInvite` return type was inconsistent across
+   the plan.** Flow 3 said "returns the tournament row" on success;
+   the test plan said `{status: 'invalid_token'}` on failure. Flow 3
+   now declares the explicit signature
+   `(db, token: string, playerId: string) => Tournament | { status: 'invalid_token' }`
+   so the implementer and any future reader can find the discriminated
+   union in one place. The route handler maps `{status: 'invalid_token'}`
+   to HTTP 410.
+
+### Things the reviewer explicitly verified (preserved here so a
+future reader knows the plan's claims were independently checked):
+
+- Schema fidelity: every column M5 uses exists exactly as
+  `0001_init.sql` defines it.
+- Partial-index syntax (`CREATE INDEX ... WHERE col IS NOT NULL`)
+  works on the SQLite version `better-sqlite3` 11.3.0 bundles
+  (SQLite 3.46+).
+- `lib/db/match.ts` is correctly untouched under Q-TOURN-2 = shared.
+  `upsertOverall` preserves `escrowed_elo` (M4 resolved review note
+  #3); M5 does not disturb that.
+- `NewMatchForm.tsx` currently sends `{gameId, participants}` — the
+  planned `tournamentId` extension is additive and backwards-compatible
+  with the existing Zod schema in `/api/matches`.
+- No wizard / k8s / Dockerfile / env-var / configmap changes are
+  required. The `APP_RUNTIME_SECRET_KEYS` set is unchanged.
+- Independent Review Rule: `claude-opus-4.7-m5-implementer` (author)
+  vs `claude-sonnet-4-6-m5-reviewer` (reviewer) — different agents.
