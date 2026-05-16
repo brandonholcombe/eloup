@@ -38,7 +38,7 @@ When you change project state that a symbol tracks:
 
 ## Review Gate
 
-A PreToolUse hook (`.claude/hooks/require-review.sh`) enforces **review before implementation**. When active task documents exist in `Agents/TODO/Active/`, source file edits (`src/`, `k8s/`, `scripts/`, `config/`) are blocked until a corresponding review report exists in `Agents/Review-reports/`.
+A PreToolUse hook (`.claude/hooks/require-review.sh`) enforces **review before implementation**. When active task documents exist in `Agents/TODO/Active/`, source file edits (`src/`, `k8s/`, `scripts/`, `config/`, `eloup-web/`) are blocked until a corresponding review report exists in `Agents/Review-reports/`.
 
 ### Workflow
 

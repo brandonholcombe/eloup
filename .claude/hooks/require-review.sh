@@ -31,7 +31,7 @@ FILE_PATH=$(echo "$INPUT" | jq -r '.tool_input.file_path // empty')
 
 # Only gate production files — allow everything else
 case "$FILE_PATH" in
-    */src/*|*/k8s/*|*/scripts/*|*/config/*) ;;
+    */src/*|*/k8s/*|*/scripts/*|*/config/*|*/eloup-web/*) ;;
     *) exit 0 ;;
 esac
 
