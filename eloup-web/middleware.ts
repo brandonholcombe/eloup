@@ -5,8 +5,8 @@ import type { NextRequest } from 'next/server';
 // presence — the real validation happens server-side in route handlers via
 // auth(). This keeps middleware out of node:crypto / better-sqlite3 paths
 // and lets it run on the edge.
-const PROTECTED_PREFIXES = ['/matches', '/profile', '/games'];
-const PROTECTED_API_MUTATIONS = ['/api/matches', '/api/games'];
+const PROTECTED_PREFIXES = ['/matches', '/profile', '/games', '/tournaments'];
+const PROTECTED_API_MUTATIONS = ['/api/matches', '/api/games', '/api/tournaments'];
 
 const SESSION_COOKIES = [
   'authjs.session-token',
@@ -42,5 +42,13 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/matches/:path*', '/profile/:path*', '/games/:path*', '/api/matches/:path*', '/api/games/:path*'],
+  matcher: [
+    '/matches/:path*',
+    '/profile/:path*',
+    '/games/:path*',
+    '/tournaments/:path*',
+    '/api/matches/:path*',
+    '/api/games/:path*',
+    '/api/tournaments/:path*',
+  ],
 };

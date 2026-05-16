@@ -14,26 +14,46 @@ type Game = {
 
 type Player = { id: string; display_name: string; discord_handle: string };
 
+type Tournament = {
+  id: string;
+  slug: string;
+  name: string;
+  members: Player[];
+};
+
 type Row = { playerId: string; placement: number; teamLabel: string };
 
 export function NewMatchForm({
   games,
   players,
   viewerId,
+  tournaments,
+  defaultTournamentSlug,
 }: {
   games: Game[];
   players: Player[];
   viewerId: string;
+  tournaments: Tournament[];
+  defaultTournamentSlug: string | null;
 }) {
   const router = useRouter();
   const [gameId, setGameId] = useState(games[0]?.id ?? '');
   const game = useMemo(() => games.find((g) => g.id === gameId), [games, gameId]);
+  const initialTournament = defaultTournamentSlug
+    ? tournaments.find((t) => t.slug === defaultTournamentSlug) ?? null
+    : null;
+  const [tournamentId, setTournamentId] = useState<string>(initialTournament?.id ?? '');
+  const tournament = useMemo(
+    () => (tournamentId ? tournaments.find((t) => t.id === tournamentId) ?? null : null),
+    [tournaments, tournamentId],
+  );
+  const eligiblePlayers = tournament ? tournament.members : players;
   const [rows, setRows] = useState<Row[]>([{ playerId: viewerId, placement: 1, teamLabel: 'A' }]);
   const [err, setErr] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const playerName = (id: string) =>
-    players.find((p) => p.id === id)?.display_name ?? '?';
+    eligiblePlayers.find((p) => p.id === id)?.display_name ?? '?';
 
   return (
     <form
@@ -48,6 +68,7 @@ export function NewMatchForm({
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
               gameId,
+              tournamentId: tournamentId || null,
               participants: rows.map((r) => ({
                 playerId: r.playerId,
                 placement: Number(r.placement),
@@ -64,6 +85,27 @@ export function NewMatchForm({
         });
       }}
     >
+      {tournaments.length > 0 && (
+        <label className="block text-sm">
+          Tournament (optional)
+          <select
+            value={tournamentId}
+            onChange={(e) => {
+              setTournamentId(e.target.value);
+              setRows([{ playerId: viewerId, placement: 1, teamLabel: 'A' }]);
+            }}
+            className="mt-1 block w-full h-tap rounded-md border border-slate-700 bg-slate-900 px-2"
+          >
+            <option value="">— Casual match —</option>
+            {tournaments.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <label className="block text-sm">
         Game
         <select
@@ -89,7 +131,7 @@ export function NewMatchForm({
                 onChange={(e) => updateRow(i, { playerId: e.target.value })}
                 className="mt-1 block w-full h-tap rounded-md border border-slate-700 bg-slate-900 px-2 text-sm"
               >
-                {players.map((p) => (
+                {eligiblePlayers.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.display_name}
                   </option>
@@ -135,7 +177,11 @@ export function NewMatchForm({
         onClick={() =>
           setRows([
             ...rows,
-            { playerId: players[0]?.id ?? viewerId, placement: rows.length + 1, teamLabel: 'B' },
+            {
+              playerId: eligiblePlayers[0]?.id ?? viewerId,
+              placement: rows.length + 1,
+              teamLabel: 'B',
+            },
           ])
         }
         className="h-tap min-w-tap rounded-md bg-slate-800 px-3 text-sm text-slate-300 hover:bg-slate-700"

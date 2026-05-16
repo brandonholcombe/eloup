@@ -86,14 +86,14 @@
       }
     },
     "tournaments": {
-      "description": "Multi-match groupings with delegated admins. Bracket format, rating-pool isolation, invite semantics, and creator-demotion rules are TBD pending Q-TOURN-1..4 — tracked here so the schema and admin role exist now and the rules slot in without rewrites.",
+      "description": "Flat named groupings of matches with per-tournament delegated admins. Format is a single named-group model (no brackets in M5). Rating pool is shared with casual matches (same per-game and overall ELO tables). Invites are a single revocable shared-link token stored on the row; rotation = re-issue, revoke = NULL. The creator is a permanent super-admin per tournament (only a global_admin can demote them). tournament_admin is per-tournament authority derived from the tournament_admins table, not from players.role.",
       "docs": ["docs/tournaments.md"],
       "properties": {
         "has_admin_role": true,
-        "format": "TBD",
-        "rating_pool": "TBD",
-        "invite_model": "TBD",
-        "creator_demotable": "TBD"
+        "format": "named_group",
+        "rating_pool": "shared",
+        "invite_model": "single_shared_link",
+        "creator_demotable": false
       },
       "interlocks": {}
     },

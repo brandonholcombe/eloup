@@ -1,9 +1,14 @@
 import Link from 'next/link';
 import { auth, signIn } from '@/lib/auth';
 
-const ITEMS: { href: '/leaderboards' | '/matches' | '/profile'; label: string; icon: string }[] = [
+const ITEMS: {
+  href: '/leaderboards' | '/matches' | '/tournaments' | '/profile';
+  label: string;
+  icon: string;
+}[] = [
   { href: '/leaderboards', label: 'Boards', icon: '🏆' },
   { href: '/matches', label: 'Matches', icon: '🎲' },
+  { href: '/tournaments', label: 'Cups', icon: '🏁' },
   { href: '/profile', label: 'Me', icon: '👤' },
 ];
 
@@ -49,18 +54,6 @@ export async function BottomNav() {
             </Link>
           </li>
         ))}
-        {/* Reserved slot for M5 /tournaments. Disabled placeholder per the M4→M5
-            hand-off contract — keeps the bottom-nav width stable when M5 ships. */}
-        <li className="flex-1">
-          <span
-            aria-disabled
-            title="Tournaments — coming in M5"
-            className="flex h-tap min-w-tap flex-col items-center justify-center gap-0.5 text-xs text-slate-600"
-          >
-            <span aria-hidden className="text-lg">🏁</span>
-            Soon
-          </span>
-        </li>
         {!signedIn && (
           <li className="flex-1">
             <SignInButton />

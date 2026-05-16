@@ -1,6 +1,6 @@
 {
-  "root": "d8c31722def96249",
-  "generated": "2026-05-16T03:44:16Z",
+  "root": "15c5e63797cf7046",
+  "generated": "2026-05-16T06:13:48Z",
   "status": "aligned",
   "symbols": {
     "app": {
@@ -77,11 +77,11 @@
       "interlocks": {}
     },
     "tournaments": {
-      "hash": "e3dc76da93f0565a",
-      "means": "tournaments: creator_demotable=TBD, format=TBD, has_admin_role=True, invite_model=TBD, rating_pool=TBD",
+      "hash": "bf45b8058ce1f7e7",
+      "means": "tournaments: creator_demotable=False, format=named_group, has_admin_role=True, invite_model=single_shared_link, rating_pool=shared",
       "docs": {
         "docs/tournaments.md": {
-          "hash": "7486a2df4424ff93",
+          "hash": "4480b700cebcb542",
           "status": "current"
         }
       },
