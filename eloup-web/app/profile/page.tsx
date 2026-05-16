@@ -1,5 +1,7 @@
+import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
+import { adminNavLinks } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,6 +48,8 @@ export default async function ProfilePage() {
     )
     .all(playerId) as RecentRow[];
 
+  const adminLinks = adminNavLinks(session.user.role);
+
   return (
     <main className="p-4">
       <h1 className="text-2xl font-semibold">{session.user.name ?? 'Profile'}</h1>
@@ -81,6 +85,25 @@ export default async function ProfilePage() {
           </ul>
         )}
       </section>
+
+      {adminLinks.length > 0 && (
+        <section className="mt-6">
+          <h2 className="text-sm uppercase tracking-wide text-slate-500">Admin</h2>
+          <ul className="mt-2 space-y-2">
+            {adminLinks.map((link) => (
+              <li key={link.href}>
+                <Link
+                  href={link.href}
+                  className="flex min-h-tap items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                >
+                  <span>{link.label}</span>
+                  <span aria-hidden className="text-slate-500">→</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="mt-6">
         <h2 className="text-sm uppercase tracking-wide text-slate-500">Recent</h2>

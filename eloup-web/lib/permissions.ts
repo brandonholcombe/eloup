@@ -16,6 +16,13 @@ export function canCreateGame(s: SessionPlayer | null): boolean {
   return s?.role === 'global_admin';
 }
 
+export type AdminNavLink = { href: string; label: string };
+
+export function adminNavLinks(role: Role | undefined): AdminNavLink[] {
+  if (role !== 'global_admin') return [];
+  return [{ href: '/games', label: 'Games' }];
+}
+
 export function canEditMatch(
   db: Database.Database,
   s: SessionPlayer | null,
