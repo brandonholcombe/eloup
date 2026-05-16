@@ -1,7 +1,7 @@
 # M4 — EloUp web app MVP: auth, schema, ELO, match flows, leaderboards, PWA
 
 ## Author: claude-opus-4.7-m4-implementer
-## Status: Not Started
+## Status: In Progress
 
 > Implementation plan for milestone M4 of `project-review-and-plan.md` (§4.2
 > "EloUp Web App"). Lands the actual Next.js application that the M0→M3
