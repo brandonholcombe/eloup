@@ -157,6 +157,15 @@ def test_phase6_renders_all_files_with_real_image(tmp_path: Path, workspace: Pat
     assert vct["spec"]["storageClassName"] == "linode-block-storage-retain"
     assert vct["spec"]["resources"]["requests"]["storage"] == "5Gi"
 
+    # M4 reviewer-style regression guard: the ConfigMap must carry the Auth.js v5
+    # canonical URL hints. Without AUTH_URL the OAuth sign-in form rendered
+    # against the pod's bind address (0.0.0.0:3000) instead of the public host,
+    # breaking Discord sign-in on first real prod rollout.
+    cm = yaml.safe_load((workspace / "K8s/configmap-web.yaml").read_text())
+    assert cm["data"]["AUTH_URL"] == "https://eloup.kodloki.io"
+    assert cm["data"]["AUTH_TRUST_HOST"] == "true"
+    assert cm["data"]["APP_DOMAIN"] == "https://eloup.kodloki.io"
+
     app = yaml.safe_load((workspace / "argocd/eloup-app.yaml").read_text())
     assert app["spec"]["source"]["repoURL"] == "https://github.com/brandonholcombe/eloup.git"
     assert app["spec"]["source"]["path"] == "K8s"

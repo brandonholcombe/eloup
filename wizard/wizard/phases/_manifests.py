@@ -78,6 +78,8 @@ data:
   DISCORD_CLIENT_ID: "{discord_client_id}"
   APP_DOMAIN: "https://{app_domain}"
   DATABASE_PATH: "{DATABASE_PATH}"
+  AUTH_URL: "https://{app_domain}"
+  AUTH_TRUST_HOST: "true"
 """
 
 
