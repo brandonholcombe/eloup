@@ -13,7 +13,7 @@ Standard ELO. Per-(player, game) ratings are the source of truth.
 
 For 1v1 games, ELO applies directly. For >2-player matches we compute pairwise ELO updates over every (winner, loser) pair from the final placement, then average the deltas per player. K is divided by `(n − 1)` so a single match is not weighted as N pairwise matches.
 
-Team-format ELO (up to 8v8) is unresolved (Q-RATE-2); proposed default is "each member gets the same delta computed from team-average ratings" but not yet committed.
+Team-format ELO (up to 8v8) uses **team-average ELO with equal delta to each member** (Q-RATE-2 default (a), committed in M4). The two teams' average per-(player, game) ratings produce a single 1v1-style update; every member of the winning team gets `+d`, every member of the losing team gets `-d`. Captured as the `rating.team_match_formula = "team_average_equal_delta"` symbol property.
 
 ## Overall rating
 

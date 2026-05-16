@@ -1,8 +1,19 @@
 {
-  "root": "63cf23a926c0b318",
-  "generated": "2026-05-10T07:09:26Z",
+  "root": "d8c31722def96249",
+  "generated": "2026-05-16T03:44:16Z",
   "status": "aligned",
   "symbols": {
+    "app": {
+      "hash": "c64d95fa9503a309",
+      "means": "app: anonymous_leaderboards=True, auth_lib=authjs_v5, css=tailwind, db_layer=better_sqlite3_direct, e2e_runner=playwright, first_admin_bootstrap=env_discord_id_optional, migration_strategy=sql_files_versioned, next_major=15, next_router=app_router, pwa_strategy=manual_sw, session_strategy=jwt, test_runner=vitest, ui_lib=tailwind_handwritten",
+      "docs": {
+        "docs/app.md": {
+          "hash": "415d867c08f084e7",
+          "status": "current"
+        }
+      },
+      "interlocks": {}
+    },
     "architecture": {
       "hash": "ba887812097cee90",
       "means": "architecture: db=sqlite, framework=next.js, gitops=argocd, image_arch=linux/amd64, image_registry=dockerhub, orchestrator=kubernetes, runtime=node20",
@@ -55,11 +66,11 @@
       }
     },
     "rating": {
-      "hash": "780273b29eb8228a",
-      "means": "rating: algorithm=elo, default_k=32, floor=0, overall_default_k=32, overall_rating_model=independent_elo, overall_starting_rating=1200, scope=per_game, starting_rating=1200",
+      "hash": "02d9c2415171c729",
+      "means": "rating: algorithm=elo, default_k=32, floor=0, overall_default_k=32, overall_rating_model=independent_elo, overall_starting_rating=1200, scope=per_game, starting_rating=1200, team_match_formula=team_average_equal_delta",
       "docs": {
         "docs/rating.md": {
-          "hash": "e66dae8969d79c3b",
+          "hash": "b55c2dafc101a714",
           "status": "current"
         }
       },
