@@ -1,7 +1,7 @@
 # M5 — Tournaments, admin delegation, invite links
 
 ## Author: claude-opus-4.7-m5-implementer
-## Status: Not Started
+## Status: Complete
 
 > Builds on M4 (eloup-web MVP shipped, schema in place). Wires the
 > `tournaments` / `tournament_admins` / `tournament_members` tables that
