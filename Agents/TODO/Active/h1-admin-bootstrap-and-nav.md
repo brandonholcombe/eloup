@@ -2,7 +2,7 @@
 
 ## Author: claude-opus-4.7-h1-implementer
 
-## Status: Not Started
+## Status: Complete
 
 > **Author/Reviewer separation note.** Prior M2–M5 authors are
 > `claude-opus-4.7-m2-implementer`, `…-m3-implementer`, `…-m4-implementer`,
@@ -60,7 +60,7 @@ only. `tournament_admin`-derived authority does not unlock `/games`.
 | File | Change |
 |---|---|
 | `wizard/wizard/config.py` | Add `bootstrap_admin_discord_id` to `CONFIG_FIELDS` and `CollectedConfig`. Default `None` — propagates as the dataclass field's `None` when absent from YAML, never `""`. |
-| `wizard/wizard/prompts.py` | `_from_yaml_only` reads `data.get("bootstrap_admin_discord_id")` and passes through `None` when missing. `_interactive_collect` prompts for it with an empty-string default that maps to `None` after stripping. |
+| `wizard/wizard/prompts.py` | `_from_yaml_only` reads `data.get("bootstrap_admin_discord_id") or None` — the `or None` normalization is **required** so YAML `""` → `None` rather than flowing through as a non-None empty string. `_interactive_collect` prompts with an empty-string default and applies the same `or None` normalization after stripping. |
 | `wizard/wizard/phases/_manifests.py` | `render_configmap(*, discord_client_id, app_domain, bootstrap_admin_discord_id=None)` — when truthy, emit `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID: "<value>"` in `data:`. When `None`, omit the key entirely (do NOT emit `: ""`). |
 | `wizard/wizard/phases/generate_manifests.py` | Read `config.get("bootstrap_admin_discord_id")` and pass through. |
 | `wizard/tests/test_generate_manifests.py` | Two new tests asserting present vs absent ConfigMap key. |
@@ -70,8 +70,9 @@ only. `tournament_admin`-derived authority does not unlock `/games`.
 
 | File | Change |
 |---|---|
-| `eloup-web/app/profile/page.tsx` | Append an "Admin" section, visible only when `session.user.role === 'global_admin'`, containing a single `Link href="/games"` styled as a row matching the existing `border border-slate-800 bg-slate-900` card pattern. 44×44px min tap target. |
-| `eloup-web/tests/unit/profile-admin-section.test.ts` | Render-shape test: import the admin-section helper and assert the link appears only for `global_admin`. (See "Tests" below for shape — Vitest is `.ts` only per `vitest.config.ts`.) |
+| `eloup-web/lib/permissions.ts` | Export a pure helper `adminNavLinks(role: Role): { href: string; label: string }[]` — returns `[{ href: '/games', label: 'Games' }]` for `'global_admin'` and `[]` otherwise. Pure-logic file; no Next.js context required for the unit test. |
+| `eloup-web/app/profile/page.tsx` | Append an "Admin" section, visible only when `adminNavLinks(session.user.role).length > 0`, rendering one `Link` per entry styled as a row matching the existing `border border-slate-800 bg-slate-900` card pattern. 44×44px min tap target via `min-h-tap`. |
+| `eloup-web/tests/unit/admin-nav-links.test.ts` | Import `adminNavLinks` and assert: `global_admin` → `[{ href:'/games', label:'Games' }]`; `user` → `[]`; `tournament_admin` → `[]`. Vitest config restricts to `tests/**/*.test.ts`, so no JSX rendering. |
 
 `BottomNav.tsx` is **deliberately NOT changed**. Rationale below.
 
@@ -177,11 +178,14 @@ Add to `wizard/tests/test_generate_manifests.py`:
    assert `"ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID" not in cm["data"]`. Also
    assert the rendering does not crash and the other five keys are
    still present.
-
-Optional sanity tests in a new `wizard/tests/test_manifests_render.py`
-(or extend `test_generate_manifests.py`) for the pure `render_configmap`
-function — present/absent cases, no I/O — to lock the omit-vs-empty
-behavior at the renderer boundary rather than only at the phase boundary.
+3. **`test_render_configmap_omits_key_for_none_and_empty_string`**
+   (REQUIRED per reviewer) — call the pure `render_configmap(...)`
+   function directly with `bootstrap_admin_discord_id=None`,
+   `bootstrap_admin_discord_id=""`, and `bootstrap_admin_discord_id="123"`.
+   First two cases: assert the substring `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID`
+   does NOT appear in the returned YAML. Third case: assert it appears
+   with the right value. Locks omit-vs-empty at the renderer boundary,
+   independent of phase plumbing.
 
 ### eloup-web (vitest)
 
@@ -305,6 +309,12 @@ out of scope for H1.
        --config /root/.config/eloup-wizard/wizard.yaml \
        --retry-from generate_manifests
      ```
+   - `cat K8s/configmap-web.yaml | grep BOOTSTRAP` — sanity-check the
+     rendered file before commit.
+   - After ArgoCD reconciles:
+     `kubectl --kubeconfig=$HOME/.kube/linode-config -n eloup get configmap eloup-web-config -o yaml | grep -i bootstrap`
+     → expect the key present. Catches a silently-missing key before
+     the pod restart and tightens the feedback loop.
    - `kubectl --kubeconfig=$HOME/.kube/linode-config -n eloup rollout restart sts/eloup-web`
    - `kubectl --kubeconfig=$HOME/.kube/linode-config -n eloup exec eloup-web-0 -- printenv | grep BOOTSTRAP`
      → expect `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID=481702948146249728`.
