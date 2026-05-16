@@ -20,6 +20,16 @@ import {
   revokeInvite,
 } from '@/lib/invites';
 
+// Minimal env so lib/env's zod schema succeeds when buildJoinResponse calls
+// env() to look up APP_DOMAIN for the post-join redirect. Must run before
+// any env() call. Mutating process.env directly is fine because each test
+// file runs in its own vitest fork worker.
+process.env.DISCORD_CLIENT_ID ??= 'test-client-id';
+process.env.DISCORD_CLIENT_SECRET ??= 'test-client-secret';
+process.env.APP_SESSION_SECRET ??= 'x'.repeat(43);
+process.env.APP_DOMAIN ??= 'https://eloup.kodloki.io';
+process.env.DATABASE_PATH ??= '/tmp/eloup-tournament-lifecycle.sqlite';
+
 function freshDb() {
   const dir = mkdtempSync(join(tmpdir(), 'eloup-tournament-lifecycle-'));
   const db = new Database(join(dir, 'test.sqlite'));
@@ -114,7 +124,7 @@ describe('invite lifecycle', () => {
     ).n;
 
     const result = consumeInvite(db, token, 'bob');
-    const response = buildJoinResponse(result, 'https://eloup.kodloki.io/tournaments/join/' + token);
+    const response = buildJoinResponse(result);
     expect(response.status).toBe(410);
 
     const memberCountAfter = (
@@ -131,9 +141,14 @@ describe('invite lifecycle', () => {
     const t = createTournament(db, { name: 'T1', ownerId: 'alice' });
     const { token } = issueInvite(db, t.id);
     const result = consumeInvite(db, token, 'bob');
-    const response = buildJoinResponse(result, 'https://eloup.kodloki.io/tournaments/join/' + token);
+    const response = buildJoinResponse(result);
     expect(response.status).toBe(303);
-    expect(response.headers.get('location')).toBe(`https://eloup.kodloki.io/tournaments/${t.slug}`);
+    const location = response.headers.get('location') ?? '';
+    // Regression guard: the redirect host MUST be APP_DOMAIN's host, never the
+    // server bind interface (0.0.0.0:3000). M5 originally built `target` from
+    // `req.url`, which Next.js populates from the bind interface in-cluster.
+    expect(new URL(location).host).toBe('eloup.kodloki.io');
+    expect(location).toBe(`https://eloup.kodloki.io/tournaments/${t.slug}`);
     db.close();
   });
 

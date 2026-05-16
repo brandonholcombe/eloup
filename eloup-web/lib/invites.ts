@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { NextResponse } from 'next/server';
 import type Database from 'better-sqlite3';
+import { env } from '@/lib/env';
 import { getTournamentById, type TournamentRow } from '@/lib/tournaments';
 
 const TOKEN_BYTES = 18;
@@ -68,13 +69,18 @@ export function getInviteToken(
   return t?.invite_token ?? null;
 }
 
-export function buildJoinResponse(result: ConsumeResult, requestUrl: string): Response {
+export function buildJoinResponse(result: ConsumeResult): Response {
   if (result.status === 'invalid_token') {
     return new NextResponse('Invite is no longer valid', {
       status: 410,
       headers: { 'content-type': 'text/plain; charset=utf-8' },
     });
   }
-  const target = new URL(`/tournaments/${result.tournament.slug}`, requestUrl);
+  // Build the absolute redirect against APP_DOMAIN, NOT req.url. Next.js
+  // populates req.url from the server's bind interface (0.0.0.0:3000 in
+  // the cluster), and forwarded-host trust isn't applied to URL parsing
+  // here. APP_DOMAIN is the canonical public origin, validated as a URL
+  // by lib/env's zod schema.
+  const target = new URL(`/tournaments/${result.tournament.slug}`, env().APP_DOMAIN);
   return NextResponse.redirect(target, 303);
 }

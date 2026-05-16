@@ -14,5 +14,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ token: s
     await signIn('discord', { redirectTo: callback });
     return new NextResponse('redirecting to sign-in', { status: 401 });
   }
-  return buildJoinResponse(consumeInvite(db(), token, session.user.id), req.url);
+  return buildJoinResponse(consumeInvite(db(), token, session.user.id));
 }
