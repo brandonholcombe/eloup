@@ -9,13 +9,19 @@
 > `grafana/grafana:latest` per `K8s/statefulset-web.yaml:23`). Honors the
 > M3→M4 hand-off contract in `m3-wizard-phases-6-9.md` §"M3→M4 hand-off
 > contract" — M4 ships an `eloup-web/Dockerfile` listening on port 3000
-> with `/api/health`; the wizard reruns and the image flips over without
-> any wizard code changes.
+> with `/api/health`; the wizard reruns and the image flips over.
+>
+> M4 also makes **one targeted wizard change**: adding
+> `nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"` to the ingress
+> template in `wizard/wizard/phases/_manifests.py` so the first OAuth
+> callback doesn't 502 on the default nginx buffer. This is the only
+> wizard touch in M4 and is isolated to its own commit per
+> review-incorporation note 5 below.
 >
 > Per the M2/M3 reviewer's "commit 1 is task doc only" pattern: this doc
-> + a one-line review-gate hook extension are commit 1. The reviewer
+> + the one-line review-gate hook extension are commit 1. The reviewer
 > commits their report separately as commit 2. Implementer's feature
-> commits become commits 3 and 4 (engine + UI).
+> commits become commits 3, 4, 5 (engine; wizard ingress fix; UI/PWA).
 >
 > **Author/Reviewer separation note.** Prior authors include
 > `claude-opus-4.7-planner`, `…-m2-implementer`, `…-m3-implementer`;
@@ -23,6 +29,12 @@
 > `…-m3-reviewer`. The reviewer for this doc must use a `## Reviewer:`
 > field distinct from `## Author: claude-opus-4.7-m4-implementer`, per
 > the review gate's self-review rule.
+>
+> **Review-incorporation note (2026-05-15):** the independent review at
+> `Agents/Review-reports/m4-eloup-web-mvp-review.md` raised 4 [MAJOR] +
+> 4 [MINOR] + 3 [NIT] findings. Sections below have been amended where
+> the review changed the plan; "Resolved review notes" at the bottom
+> records what changed and why.
 
 ---
 
@@ -49,11 +61,15 @@ wizard auto-detects this layout via
   KYTO docs land.
 - **Backups, log shipping, monitoring beyond `/api/health`.** Listed as
   open follow-ups at the bottom; not in M4.
-- **Wizard changes.** M4 is supposed to require zero wizard edits.
-  Per the M3 hand-off contract: if I find myself wanting to touch the
-  wizard, stop and flag it. The only known wizard-adjacent edit is the
-  `.claude/hooks/require-review.sh` patch in commit 1 — that's a
-  hook scaffolding file, not wizard code.
+- **Wizard changes.** M4 makes **one** wizard edit per resolved review
+  note 5: adding `nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"`
+  to the ingress template in `wizard/wizard/phases/_manifests.py`
+  (commit 4 below). Rationale: Next.js + Auth.js v5 + Discord OAuth
+  sends large `Set-Cookie` + state-token headers on the callback;
+  default nginx buffers 502 the response. This must be in the manifest
+  from day-one for sign-in to work. The wizard touch is isolated to a
+  single annotation + its corresponding test. The other "wizard-adjacent"
+  M4 edit — `.claude/hooks/require-review.sh` — is in commit 1.
 
 ---
 
@@ -98,7 +114,7 @@ accepted unless noted:
 | **Q-RATE-4** per-game ELO before first match | **Lazy.** Insert a `ratings` row at first match with `rating_before = 1200`. No pre-creation on signup. Cheaper write path and a player who never plays a game gets no row. |
 | **Q-APP-1** PWA install prompt | **Proactive on first authenticated load.** Android: native `beforeinstallprompt` captured + replayed via a banner. iOS: custom share-sheet hint when `navigator.standalone === false`. Dismiss state in `localStorage["eloup.install.dismissed"]` (UA-keyed so dismissing on iOS doesn't suppress on Android). |
 | **Q-APP-2** offline behavior | **Read-only cached leaderboards.** SW caches the app shell + the JSON response of `GET /api/leaderboards` (stale-while-revalidate). Writes always require network — no offline queue. |
-| **Q-AUTH-3** admin bootstrap | **(a) `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID` env var.** First matching login is promoted to `global_admin`. Promotion is idempotent (re-running with the same env var on an existing global_admin is a no-op). No `_EMAIL` fallback — emails are mutable, snowflakes aren't. Operator looks up their snowflake once via Discord Developer Mode. |
+| **Q-AUTH-3** admin bootstrap | **(a) `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID` env var.** First matching login is promoted to `global_admin`. Promotion is idempotent (re-running with the same env var on an existing global_admin is a no-op). No `_EMAIL` fallback — emails are mutable, snowflakes aren't. Operator looks up their snowflake once via Discord Developer Mode. **Operator supply mechanism**: the env var is NOT wired through the wizard (the wizard's configmap renders only the three keys named in the M3 contract; `APP_RUNTIME_SECRET_KEYS` is exactly `{discord_client_secret, app_session_secret}`). After the StatefulSet is Healthy, the operator runs `kubectl -n eloup set env statefulset/eloup-web ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID=<snowflake>`; the pod restarts and the var is read at first matching sign-in. Subsequent logins ignore it (the `players.role='global_admin'` row is the authoritative state). Documented in `docs/app.md`. |
 
 **Q-APP-3** (UI library) and stack additions decided by the M4 prompt
 discussion: **shadcn/ui + Tailwind for UI; better-sqlite3 direct (no
@@ -167,13 +183,13 @@ eloup-web/
 │   │   └── page.tsx                    auth-gated; overall + per-game ratings + recent matches
 │   ├── games/
 │   │   └── page.tsx                    global_admin only; CRUD on games catalog
-│   ├── install-hint/page.tsx           NOT really a route — the InstallHint component lives in BottomNav; this is here only if we want a /install-hint debug route. (Drop pre-merge if unused.)
 │   └── api/
-│       ├── health/route.ts             GET → 200 {ok:true} after SELECT 1; not auth-gated
-│       ├── auth/[...nextauth]/route.ts Auth.js v5 handlers
-│       ├── leaderboards/route.ts       GET → JSON; cached by SW; public
-│       ├── matches/route.ts            POST (create); PATCH (confirm row)
-│       └── games/route.ts              GET public; POST/PATCH global_admin only
+│       ├── health/route.ts                          GET → 200 {ok:true} after SELECT 1; not auth-gated
+│       ├── auth/[...nextauth]/route.ts              Auth.js v5 handlers
+│       ├── leaderboards/route.ts                    GET → JSON; cached by SW; public
+│       ├── matches/route.ts                         POST → create match (caller authed)
+│       ├── matches/[id]/confirm/route.ts            POST → confirm caller's row (last row triggers ELO tx)
+│       └── games/route.ts                           GET public; POST/PATCH global_admin only
 ├── components/
 │   ├── BottomNav.tsx                   client; pinned bottom, 44px tap targets, safe-area-inset-bottom padding
 │   ├── InstallHintIOS.tsx              client; iOS Safari only; one-time dismiss via localStorage
@@ -183,7 +199,7 @@ eloup-web/
 │   ├── ConfirmRowButton.tsx            client (server action wrapper); triggers PATCH /api/matches
 │   └── ui/                             shadcn copies — Button, Input, Dialog, Tabs, etc.
 ├── lib/
-│   ├── env.ts                          zod schema for DISCORD_CLIENT_ID/SECRET, APP_SESSION_SECRET, APP_DOMAIN, DATABASE_PATH, ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID; throws at module import if invalid
+│   ├── env.ts                          zod schema: required → DISCORD_CLIENT_ID/SECRET, APP_SESSION_SECRET, APP_DOMAIN, DATABASE_PATH; optional → ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID (z.string().optional()); throws at module import if any required field is invalid
 │   ├── auth.ts                         Auth.js v5 config: Discord provider, signIn callback (rejects unverified), jwt/session callbacks, bootstrap-admin promotion
 │   ├── permissions.ts                  can_confirm_row(player, row), can_create_game(player), can_edit_match(player, match)
 │   ├── elo.ts                          PURE: computeMatchDeltas(participants, outcomes, k) → Map<playerId, delta>
@@ -211,16 +227,18 @@ eloup-web/
     └── golden-path.spec.ts             Playwright; @e2e tag; skipped in CI unit-runs
 ```
 
-I can defend every top-level entry. The two judgement calls:
+I can defend every top-level entry. One judgement call:
 
 - **`pnpm` over `npm`/`yarn`.** Faster installs, deterministic via
   `pnpm-lock.yaml`, smaller node_modules due to content-addressed store.
   Brief doesn't pin a package manager; pnpm is what most new Next.js
   projects use in 2026. The Dockerfile's `deps` stage uses
   `corepack enable && pnpm install --frozen-lockfile`.
-- **`app/install-hint/page.tsx`** is the only "maybe drop" file. It's
-  a debug route to render the iOS hint outside its UA gate — useful for
-  Lighthouse runs and reviewing styling. If unused at merge time, drop.
+
+(The earlier `app/install-hint/page.tsx` debug route was dropped per
+resolved review note 10 — the install-hint component renders inside
+the layout and is tested via Vitest snapshot + Playwright, so a
+dedicated debug route adds no value.)
 
 ---
 
@@ -254,6 +272,25 @@ DEFERRED only acquires when the first write happens — too late.
 **Why one file per migration:** smaller diffs, easier to bisect a
 "this migration broke prod" failure. The single M4 file (`0001_init.sql`)
 contains the entire schema.
+
+**DDL nullability** (clarifies the §4.2 schema sketch, per resolved
+review note 4):
+
+- `match_participants.rating_before REAL NULL` and `rating_delta REAL
+  NULL` — inserted as NULL at match creation, filled at confirm time
+  by Flow 4's transaction. The DDL must declare them nullable
+  explicitly; the §4.2 sketch's "rating_before, rating_delta" without
+  annotation is ambiguous but the intent (per Flow 3/4) is nullable.
+- `match_participants.team_label TEXT NULL`, `placement INTEGER NULL`,
+  `score REAL NULL`, `confirmed_at TEXT NULL` — also nullable.
+- `ratings(player_id, game_id)` is a composite PRIMARY KEY (or UNIQUE
+  on the pair) so the `ON CONFLICT(player_id, game_id)` upsert in Flow
+  4 resolves.
+- `overall_ratings.player_id` is PRIMARY KEY (one row per player) so
+  the `ON CONFLICT(player_id)` upsert resolves.
+- `overall_ratings.escrowed_elo NUMERIC NOT NULL DEFAULT 0` and the
+  CHECK constraint `current_rating >= 0` per Q-BET-2 (umbrella plan
+  §4.2). Both are non-negotiable.
 
 **Why no rollback:** SQLite doesn't have built-in down-migrations; a
 "reverse" .sql file is risky on a real prod database with rows.
@@ -318,6 +355,13 @@ the current_rating to make sense).
 Per-game ratings have no floor — they can dip below 0 in theory, but
 practically ELO doesn't trend toward 0 for active players. If we later
 decide per-game also floors at 0, that's a one-line apply-layer change.
+
+Per resolved review note 9, `lib/db/match.ts` includes a
+single-line comment immediately above the per-game upsert: `// per-game
+ratings are intentionally NOT floored at 0 — only overall_ratings is
+(Q-RATE/floor symbol property). Do NOT add a clamp here without
+updating docs/rating.md + the rating symbol.` This stops a future
+M5/M6 implementer from "fixing" the missing clamp.
 
 ---
 
@@ -463,11 +507,33 @@ They tap it. The button calls a server action that POSTs to
      `overall_ratings.current_rating` for `ratingBefore` (1200 if no row).
    - For each participant:
      - UPDATE match_participants SET rating_before = X, rating_delta = D.
-     - INSERT OR UPDATE ratings: `current_rating += d_pergame`,
-       `games_played += 1`, `last_match_id = ?`.
-     - INSERT OR UPDATE overall_ratings: `current_rating =
-       max(0, current_rating + d_overall)`, `last_match_id = ?`.
-       (Clamp at apply layer, not in `lib/elo.ts`.)
+     - Upsert per-game rating (clamp NOT applied per-game — see
+       resolved review note 9):
+       ```sql
+       INSERT INTO ratings(player_id, game_id, current_rating, games_played, last_match_id)
+       VALUES (?, ?, ?, 1, ?)
+       ON CONFLICT(player_id, game_id) DO UPDATE SET
+         current_rating = excluded.current_rating,
+         games_played   = ratings.games_played + 1,
+         last_match_id  = excluded.last_match_id
+       ```
+       The supplied `current_rating` in the VALUES tuple is the
+       already-summed `current + delta` (computed in app code).
+     - Upsert overall rating (clamp at 0; **`escrowed_elo` MUST be
+       preserved** — omitted from both the INSERT tuple and the
+       conflict-update SET so the column either takes its DEFAULT (0)
+       on first insert or stays untouched on conflict):
+       ```sql
+       INSERT INTO overall_ratings(player_id, current_rating, last_match_id)
+       VALUES (?, MAX(0, ?), ?)
+       ON CONFLICT(player_id) DO UPDATE SET
+         current_rating = MAX(0, excluded.current_rating),
+         last_match_id  = excluded.last_match_id
+       ```
+       Q-BET-2 reserved `escrowed_elo` for M6; the M4 confirm
+       transaction must NEVER overwrite it. Tested in
+       `confirm-match.test.ts` by seeding a non-zero `escrowed_elo`
+       before confirming, then asserting the same value post-confirm.
    - UPDATE matches SET status = 'confirmed', ended_at =
      coalesce(ended_at, datetime('now')).
 7. COMMIT. Revalidate `/matches`, `/matches/[id]`, `/leaderboards`.
@@ -583,6 +649,11 @@ writes/reads are real.
 ## PWA install strategy
 
 **Manifest** (`public/manifest.webmanifest`):
+
+Per resolved review note 8, `"purpose": "any maskable"` is non-standard
+and penalized by Lighthouse — split into separate entries (one `any`,
+one `maskable`) per W3C App Manifest spec:
+
 ```json
 {
   "name": "EloUp",
@@ -594,12 +665,18 @@ writes/reads are real.
   "theme_color": "#0f172a",
   "background_color": "#0f172a",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-any-192.png",  "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-any-512.png",  "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-mask-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icon-mask-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/icon-mono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "monochrome" }
   ]
 }
 ```
+
+The `any` icons are full-bleed. The `maskable` icons have ~20% safe-area
+padding so Android/iOS can crop them into any shape. The `monochrome`
+icon is for Android's themed-icons feature + iOS Dynamic Island tinting.
 
 **Service worker** (`public/sw.js`, hand-rolled, ~50 lines):
 
@@ -607,12 +684,23 @@ writes/reads are real.
   picked up at build time via a manifest emitted by a small Next.js
   custom build hook, OR — simpler — just precache `/leaderboards` HTML
   and let the runtime cache CSS/JS on first fetch).
-- `fetch` event:
-  - GET requests for `/api/leaderboards` → SWR: respond from cache
-    if present, fetch fresh in background, update cache.
-  - Other GET requests → cache-first for same-origin static assets;
-    network-first for HTML.
-  - Non-GET → bypass to network (no offline write queue).
+- `fetch` event (per resolved review note 7, prescribed HTML detection):
+  - `event.request.method !== 'GET'` → bypass to network (no offline
+    write queue).
+  - URL matches `/api/leaderboards` → SWR: respond from cache if
+    present, fetch fresh in background, update cache.
+  - `event.request.mode === 'navigate'` (top-level HTML navigation) →
+    network-first; on network failure fall back to the precached
+    `/leaderboards` shell. This is the **only** HTML branch — using
+    `mode === 'navigate'` (not `destination === 'document'`) avoids
+    accidentally caching sub-resource HTML and accidentally serving a
+    stale `/matches` page to a signed-out user that bypasses
+    middleware.
+  - URL starts with `/_next/static/` or matches `/icon-*.png` /
+    `/manifest.webmanifest` / `/sw.js` → cache-first (static assets
+    are fingerprinted, safe to cache aggressively).
+  - Everything else (incl. `/api/*` other than leaderboards) →
+    network-only.
 - `activate` event: clean up old caches by version constant.
 
 **Install hint** (`components/InstallHint*.tsx`):
@@ -649,7 +737,7 @@ runtime serves `/sw.js` from `public/` directly.
 
 ---
 
-## Symbol updates (commit 4)
+## Symbol updates (commit 5)
 
 Add a new `app` symbol to `symbols/manifest.json`:
 
@@ -692,7 +780,7 @@ Write `docs/app.md` covering:
 
 Run `python3 scripts/align.py lock`. Commit `symbols/manifest.json` +
 `symbols/manifest.lock` + `docs/app.md` + `docs/rating.md` together in
-commit 4.
+commit 5 (UI + symbols).
 
 ---
 
@@ -828,19 +916,22 @@ If any of these become blockers, stop and flag, don't bundle.
 
 ## Commit shape
 
-Four commits expected (mirroring M2/M3):
+Five commits expected (mirroring M2/M3 plus one wizard fix commit
+inserted between engine and UI per resolved review note 5):
 
 1. **`docs: M4 — eloup-web MVP task doc + extend review gate to eloup-web/`**
-   - `Agents/TODO/Active/m4-eloup-web-mvp.md` (this file)
-   - `.claude/hooks/require-review.sh` (the one-line case-extension
-     above)
-   - `CLAUDE.md` minor edit to add `eloup-web/` to the documented
-     source-paths list
+   — already landed as `d868c6d`.
+   - `Agents/TODO/Active/m4-eloup-web-mvp.md`
+   - `.claude/hooks/require-review.sh` (one-line case-extension)
+   - `CLAUDE.md` (adds `eloup-web/` to gated-paths sentence)
 
-2. **`docs: M4 — reviewer report for eloup-web MVP`**
-   - Written by the independent reviewer (different `## Reviewer:`)
+2. **`docs: M4 — reviewer report for eloup-web MVP`** — already landed
+   as `91805e9` (different `## Reviewer:`).
    - `Agents/Review-reports/m4-eloup-web-mvp-review.md`
-   - References `m4-eloup-web-mvp.md` in the body
+
+   *(A "fold review findings" commit may land between 2 and 3 mirroring
+   M3's `cfab19c`, depending on the size of the edits to this task
+   doc.)*
 
 3. **`feat: eloup-web — auth + schema + ELO engine`** (Phases A–D)
    - `eloup-web/` scaffold: `Dockerfile`, `package.json`, `pnpm-lock.yaml`,
@@ -853,23 +944,39 @@ Four commits expected (mirroring M2/M3):
    - Minimal `app/layout.tsx` + `app/page.tsx` (redirect) so `next build`
      succeeds
    - All Vitest unit + integration tests
-   - **Approximately 1,200–1,500 lines**
+   - **Approximately 1,200–1,500 lines.** **Does NOT touch `symbols/`
+     — alignment stays valid throughout** (per resolved review note 6).
 
-4. **`feat: eloup-web — routes, UI, PWA, symbol updates`** (Phases E–G)
+4. **`fix: wizard ingress — add proxy-buffer-size for OAuth callbacks`**
+   - `wizard/wizard/phases/_manifests.py` — adds
+     `nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"` to the
+     ingress template
+   - `wizard/tests/test_generate_manifests.py` — updated/new assertion
+     that the rendered ingress includes the new annotation
+   - **One annotation + one test update**, ~15 lines diff. Why
+     separate: keeps wizard touches bisectable apart from app code per
+     M3's discipline ("M4 requires zero wizard edits" was aspirational;
+     the OAuth buffer is the one exception, recorded as such in the
+     M4→M5 hand-off contract).
+
+5. **`feat: eloup-web — routes, UI, PWA, symbol updates`** (Phases E–G)
    - shadcn/ui scaffold + copied components (`components/ui/*`)
    - Domain components (`BottomNav`, `InstallHint*`, `PlacementInput`,
      `ParticipantPicker`, `ConfirmRowButton`)
-   - All five `app/*` pages + remaining `app/api/*` routes
-   - PWA assets (`public/manifest.webmanifest`, `public/sw.js`, icons)
+   - All five `app/*` pages + remaining `app/api/*` routes (including
+     `app/api/matches/[id]/confirm/route.ts` per resolved review note 1)
+   - PWA assets (`public/manifest.webmanifest`, `public/sw.js`,
+     `public/icon-*.png` — separate any + maskable entries)
    - Symbol + docs: `symbols/manifest.json` (new `app` symbol +
      `rating.team_match_formula`), `symbols/manifest.lock` (regenerated),
      `docs/app.md` (new), `docs/rating.md` (minor edit)
    - Playwright E2E spec
-   - **Approximately 1,200–1,500 lines**
+   - **Approximately 1,200–1,500 lines.** Symbol changes land here so
+     `align.py check` only needs to be run once at the end.
 
-Splitting 3+4 keeps each diff under ~1.5k lines (the M3 reviewer
-flagged this as the comfortable upper bound) and lets a future revert
-pull the UI without unwinding the engine.
+Splitting 3+5 keeps each diff under ~1.5k lines (M3 reviewer's
+comfortable upper bound) and lets a future revert pull the UI without
+unwinding the engine. Commit 4 is intentionally tiny.
 
 Each commit ends with `Co-Authored-By: Claude Opus 4.7 (1M context)
 <noreply@anthropic.com>`.
@@ -898,7 +1005,17 @@ After M4 ships, M5 (tournaments) inherits:
   + a branch in the confirm-match path keyed on `match.tournament_id`.
   Today the confirm code reads from `ratings` regardless of
   `tournament_id`; the change is additive.
-- **No new env vars needed by M4.** If M5 needs one (e.g.
+- **One new optional env var introduced by M4** —
+  `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID`. It is NOT wired through the
+  wizard (no configmap entry, not in `APP_RUNTIME_SECRET_KEYS`). The
+  operator supplies it post-deploy via `kubectl set env
+  statefulset/eloup-web -n eloup
+  ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID=<snowflake>`. `lib/env.ts` declares
+  it `z.string().optional()` so the container starts cleanly when it's
+  absent (resolved review note 2). If M5/M6 want to elevate this to a
+  wizard-provisioned value, the configmap renderer in
+  `wizard/wizard/phases/_manifests.py` is the touch point.
+- **No other new env vars needed by M4.** If M5 needs one (e.g.
   `ELOUP_TOURNAMENT_DEFAULT_K`), that secret must be threaded into
   `wizard/wizard/phases/generate_manifests.py`'s configmap renderer
   (non-secrets) or `APP_RUNTIME_SECRET_KEYS` (secrets).
@@ -960,3 +1077,114 @@ These came up while planning M4 and don't fit in M4 scope:
    deployed.** Once M4 lands and the wizard re-runs, this flips to the
    real image. After that, the `--web-image` smoke-test mode can stay
    as-is for future placeholder needs.
+
+---
+
+## Resolved review notes
+
+The independent review at `Agents/Review-reports/m4-eloup-web-mvp-review.md`
+produced the following changes to this plan. Each item names the
+review finding it addresses and the section above that was amended.
+
+1. **[MAJOR #1] File-tree / route-table mismatch: `/api/matches/[id]/confirm`
+   had no corresponding file.** The file tree now lists
+   `app/api/matches/[id]/confirm/route.ts` as a separate entry from
+   `app/api/matches/route.ts` (POST → create). The commit-5 file list
+   in §"Commit shape" mentions the confirm route explicitly. The route
+   table was already correct; the gap was in the file tree + commit
+   list. Without this, the confirm endpoint would have 404'd at
+   runtime.
+
+2. **[MAJOR #2] `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID` must be optional
+   in `env.ts`.** The `lib/env.ts` description in §"File tree" now
+   splits the zod schema into required (5 keys) and optional (1 key:
+   `ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID` as `z.string().optional()`).
+   Q-AUTH-3's row in §"Confirmed open questions" now documents the
+   operator-supply mechanism (`kubectl -n eloup set env
+   statefulset/eloup-web …`) since the wizard's configmap renderer
+   does not emit this key. The M4→M5 hand-off contract was amended:
+   "No new env vars" → "One optional env var, supplied post-deploy
+   by the operator." Without this fix, the container would crash on
+   startup of every deployment where the operator hasn't set the var.
+
+3. **[MAJOR #3] `overall_ratings` upsert must preserve `escrowed_elo`.**
+   Flow 4 step 6's transaction spec now includes the explicit SQL
+   form of the upsert. `escrowed_elo` is omitted from both the
+   INSERT tuple (DEFAULT 0 fires) and the `ON CONFLICT DO UPDATE SET`
+   clause (column stays untouched on conflict). A new
+   `confirm-match.test.ts` case seeds a non-zero `escrowed_elo` before
+   confirming and asserts the value is preserved post-confirm. M6's
+   bet placement writes this column; M4's confirm transaction must not
+   silently overwrite it.
+
+4. **[MAJOR #4] DDL nullability on `match_participants.rating_before`
+   / `rating_delta`.** Added a §"DDL nullability" subsection under
+   §"DB migration strategy" naming every nullable column in
+   `0001_init.sql` explicitly. `rating_before REAL NULL` and
+   `rating_delta REAL NULL` are nullable because Flow 3 inserts the
+   row with both as NULL and Flow 4's confirm transaction fills them.
+   The umbrella plan's §4.2 sketch was ambiguous; this clarifies.
+
+5. **[MINOR #5] `proxy-buffer-size` annotation absent from ingress —
+   Next.js + Auth.js v5 OAuth 502 risk.** Added a new commit 4 to
+   §"Commit shape" that touches the wizard's ingress template in
+   `wizard/wizard/phases/_manifests.py` to include
+   `nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"`. This is the
+   one wizard touch in M4, justified explicitly in §"Scope" and the
+   M4→M5 hand-off contract. Without it, the first OAuth callback would
+   502 on default nginx buffers — production-breaking for an
+   OAuth-dependent app.
+
+6. **[MINOR #6] Alignment validity between commits 3 and 5.** The
+   reviewer flagged that the new `app` symbol (with `docs:
+   ["docs/app.md"]`) is written to `manifest.json` in commit 5, but
+   `docs/app.md` is also written in commit 5 — so they travel together
+   and alignment stays valid. The §"Commit shape" entry for commit 3
+   now explicitly says "Does NOT touch `symbols/` — alignment stays
+   valid throughout." Commit 4 also doesn't touch `symbols/`. Commit 5
+   does both at once, then runs `align.py lock`. No interim window
+   where alignment is broken.
+
+7. **[MINOR #7] SW HTML detection ambiguity.** §"PWA install
+   strategy"'s service-worker section now prescribes
+   `event.request.mode === 'navigate'` (not `destination === 'document'`)
+   for the HTML network-first branch. This avoids accidentally caching
+   sub-resource HTML and serving a stale `/matches` shell to a
+   signed-out user (which would bypass middleware). The non-`navigate`
+   `/api/*` and static-asset branches are explicit.
+
+8. **[MINOR #8] `purpose: "any maskable"` is non-standard.** The
+   `manifest.webmanifest` example in §"PWA install strategy" now lists
+   separate icon entries for `"purpose": "any"` (full-bleed) and
+   `"purpose": "maskable"` (with safe-area padding). Public assets
+   renamed `/icon-any-{192,512}.png` and `/icon-mask-{192,512}.png`.
+   The monochrome icon stays as one entry. This restores Lighthouse's
+   PWA-install audit pass.
+
+9. **[NIT #9] Per-game ratings floor policy comment.** §"ELO function
+   signatures" now requires a single-line comment in `lib/db/match.ts`
+   above the per-game upsert: `// per-game ratings are intentionally
+   NOT floored at 0 — only overall_ratings is …`. Prevents a future
+   M5/M6 implementer from "fixing" the missing clamp.
+
+10. **[NIT #10] `install-hint/page.tsx` removal criterion.** The
+    debug route was dropped from the file tree entirely. The
+    install-hint components render inside `RootLayout` and are
+    tested via Vitest + Playwright; the dedicated debug route added
+    no value. The §"File tree" rationale now records the deletion.
+
+11. **[NIT #11] Commit 1 size deviation.** Acknowledged in §"Workflow
+    gate" and §"Commit shape". No action required — the hook edit was
+    pre-approved by the user as a one-line safety improvement.
+
+### Open questions the reviewer did not raise
+
+- **`tournament_admin` enforcement scope.** The Q-AUTH-2 default of
+  "all participants confirm" sidelines `tournament_admin`'s edit
+  power in M4 — global_admin can edit any match, but
+  `tournament_admin` has no edit path until M5 ships the tournament
+  match flow. The permission matrix in §4.2 is honored as-described.
+- **Lighthouse score automation.** §"Verification before reporting
+  done" treats the ≥ 90 mobile target as a manual measurement to
+  document in the commit message. A CI Lighthouse job is a useful
+  follow-up but not M4 scope.
