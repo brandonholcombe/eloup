@@ -193,11 +193,18 @@ spec:
 
 
 def render_ingress(*, app_domain: str) -> str:
-    """Annotation block copied verbatim from `shine/K8s/ingress.yaml` lines 6-27.
+    """Annotation block based on `shine/K8s/ingress.yaml` lines 6-27, plus
+    `proxy-buffer-size: "16k"` added for M4.
 
-    The only substitution is `{app_domain}` in `cors-allow-origin`. shine's
-    OAuth + WebSocket needs match eloup's, so the entire annotation set
-    transfers without modification.
+    The proxy-buffer-size annotation is required for Next.js + Auth.js v5
+    OAuth callbacks: Discord's response includes a large state token, and
+    the Auth.js JWT-session Set-Cookie header is large. The default nginx
+    buffer (4k or 8k depending on platform) overflows, returning 502 to
+    the user on the very first sign-in attempt. Setting 16k headroom
+    covers Discord state + JWT cookies without measurable memory impact.
+    Without this, the wizard deploys a working app that 502s on sign-in.
+
+    The only template substitution is `{app_domain}` in `cors-allow-origin`.
     """
     return f"""\
 apiVersion: networking.k8s.io/v1
@@ -209,6 +216,7 @@ metadata:
     cert-manager.io/cluster-issuer: {CLUSTER_ISSUER}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "16k"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
     nginx.ingress.kubernetes.io/proxy-connect-timeout: "3600"

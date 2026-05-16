@@ -251,6 +251,20 @@ def test_phase6_ingress_substitutes_app_domain_everywhere(tmp_path: Path, worksp
     assert ingress["spec"]["tls"][0]["hosts"] == ["test-eloup.example"]
 
 
+def test_phase6_ingress_sets_proxy_buffer_size_for_oauth(tmp_path: Path, workspace: Path) -> None:
+    # M4 — Next.js + Auth.js v5 + Discord OAuth sends large state + Set-Cookie
+    # headers. Without proxy-buffer-size raised above nginx defaults, the very
+    # first OAuth callback returns 502. Regression guard for the M4 reviewer's
+    # MINOR #5 finding.
+    ctx = _make_ctx(tmp_path)
+    with patch.object(gm.subprocess, "run", return_value=_stub_kubeseal_success()):
+        gm.GenerateManifestsPhase().run(ctx)
+
+    ingress = yaml.safe_load((workspace / "K8s/ingress.yaml").read_text())
+    annotations = ingress["metadata"]["annotations"]
+    assert annotations.get("nginx.ingress.kubernetes.io/proxy-buffer-size") == "16k"
+
+
 def test_phase6_idempotent_re_run_produces_same_files(tmp_path: Path, workspace: Path) -> None:
     ctx = _make_ctx(tmp_path)
     with patch.object(gm.subprocess, "run", return_value=_stub_kubeseal_success()):
