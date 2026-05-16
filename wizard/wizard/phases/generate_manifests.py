@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from wizard.phases._manifests import (
-    APP_RUNTIME_SECRET_KEYS,
+    APP_RUNTIME_SOURCE_KEYS,
+    RUNTIME_SECRET_KEY_MAP,
     render_argocd_application,
     render_configmap,
     render_ingress,
@@ -145,13 +146,16 @@ class GenerateManifestsPhase:
 
         secrets_path = ctx.state.data.get("secrets_ref") or ctx.paths.secrets_file
         secrets_all = read_secrets_file(Path(str(secrets_path)))
-        runtime_secrets = {k: secrets_all[k] for k in APP_RUNTIME_SECRET_KEYS if k in secrets_all}
-        missing = APP_RUNTIME_SECRET_KEYS - set(runtime_secrets)
+        missing = APP_RUNTIME_SOURCE_KEYS - set(secrets_all)
         if missing:
             raise PhaseFailed(
                 self.name,
                 f"runtime secrets missing from secrets file: {sorted(missing)} — re-run phase 2",
             )
+        runtime_secrets = {
+            RUNTIME_SECRET_KEY_MAP[src_key]: secrets_all[src_key]
+            for src_key in APP_RUNTIME_SOURCE_KEYS
+        }
 
         plain_secret = render_plain_secret(runtime_secrets)
         sealed_secret_yaml = _kubeseal(

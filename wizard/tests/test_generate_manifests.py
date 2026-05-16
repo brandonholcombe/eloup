@@ -26,8 +26,8 @@ metadata:
   namespace: eloup
 spec:
   encryptedData:
-    discord_client_secret: AgB...stub
-    app_session_secret: AgB...stub
+    DISCORD_CLIENT_SECRET: AgB...stub
+    APP_SESSION_SECRET: AgB...stub
 """
 
 
@@ -300,8 +300,44 @@ def test_render_plain_secret_rejects_pats() -> None:
     from wizard.phases._manifests import render_plain_secret
 
     with pytest.raises(ValueError) as exc_info:
-        render_plain_secret({"discord_client_secret": "x", "github_pat": "danger"})
+        render_plain_secret({"DISCORD_CLIENT_SECRET": "x", "github_pat": "danger"})
     assert "github_pat" in str(exc_info.value)
+
+
+def test_render_plain_secret_rejects_lowercase_source_keys() -> None:
+    # M3→M4 contract regression guard: envFrom: secretRef injects each Secret
+    # key verbatim as a container env var, and eloup-web's lib/env.ts requires
+    # uppercase env vars. Passing secrets.json source keys (lowercase) through
+    # render_plain_secret was the bug that caused a CrashLoopBackOff on first
+    # real prod rollout — guard against the regression.
+    from wizard.phases._manifests import render_plain_secret
+
+    with pytest.raises(ValueError) as exc_info:
+        render_plain_secret({"discord_client_secret": "x", "app_session_secret": "y"})
+    assert "discord_client_secret" in str(exc_info.value)
+    assert "app_session_secret" in str(exc_info.value)
+
+
+def test_phase6_secret_keys_are_uppercase_env_var_shape(tmp_path: Path, workspace: Path) -> None:
+    # Companion regression guard: the rendered Secret stringData MUST have
+    # uppercase env-var-shaped keys (DISCORD_CLIENT_SECRET, APP_SESSION_SECRET),
+    # not the secrets.json source keys.
+    ctx = _make_ctx(tmp_path)
+
+    captured: dict[str, object] = {}
+
+    def fake_run(args, *, input=None, **kwargs):
+        captured["input"] = input or ""
+        return _stub_kubeseal_success()
+
+    with patch.object(gm.subprocess, "run", side_effect=fake_run):
+        gm.GenerateManifestsPhase().run(ctx)
+
+    parsed = yaml.safe_load(captured["input"])
+    keys = set(parsed["stringData"].keys())
+    assert keys == {"DISCORD_CLIENT_SECRET", "APP_SESSION_SECRET"}
+    assert "discord_client_secret" not in keys
+    assert "app_session_secret" not in keys
 
 
 def test_repo_secret_constants_exposed() -> None:

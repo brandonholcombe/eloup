@@ -37,7 +37,20 @@ ARGOCD_SOURCE_PATH = "K8s"
 
 REPO_SECRET_NAME = "eloup-repo"
 
-APP_RUNTIME_SECRET_KEYS: frozenset[str] = frozenset({"discord_client_secret", "app_session_secret"})
+# Mapping from secrets.json keys (collected by phase 2) to the env-var-shaped
+# Secret keys that go into stringData. `envFrom: secretRef` injects each
+# Secret key verbatim as a container env var name, so the Secret keys ARE
+# the env var names that eloup-web's lib/env.ts validates. M4 expects
+# uppercase; the M3→M4 hand-off contract documents uppercase. This map is
+# the single place that translation lives.
+RUNTIME_SECRET_KEY_MAP: dict[str, str] = {
+    "discord_client_secret": "DISCORD_CLIENT_SECRET",
+    "app_session_secret": "APP_SESSION_SECRET",
+}
+# Source keys the wizard's secrets.json must provide (phase 2 prompts for these).
+APP_RUNTIME_SOURCE_KEYS: frozenset[str] = frozenset(RUNTIME_SECRET_KEY_MAP.keys())
+# Keys that appear in the rendered Secret manifest and become container env vars.
+APP_RUNTIME_SECRET_KEYS: frozenset[str] = frozenset(RUNTIME_SECRET_KEY_MAP.values())
 
 
 def render_namespace() -> str:
@@ -250,11 +263,11 @@ spec:
 def render_plain_secret(runtime_secrets: dict[str, str]) -> str:
     """Plaintext Secret manifest fed to kubeseal on stdin.
 
-    The caller must filter `runtime_secrets` to `APP_RUNTIME_SECRET_KEYS`
-    before calling — this is the gate that keeps the four wizard PATs
-    (DockerHub/Gitea/GitHub/Linode) out of the cluster. Phase 6 does the
-    filter; this function does not re-validate, but a defensive assert
-    catches caller mistakes early.
+    Keys MUST be env-var-shaped (i.e. members of `APP_RUNTIME_SECRET_KEYS`),
+    because `envFrom: secretRef` injects them verbatim as container env vars.
+    Callers translate secrets.json source keys via `RUNTIME_SECRET_KEY_MAP`
+    before calling. This is also the gate that keeps the four wizard PATs
+    (DockerHub/Gitea/GitHub/Linode) out of the cluster.
     """
     unexpected = set(runtime_secrets) - APP_RUNTIME_SECRET_KEYS
     if unexpected:
