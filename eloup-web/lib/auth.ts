@@ -21,7 +21,11 @@ function buildConfig(): NextAuthConfig {
       Discord({
         clientId: e.DISCORD_CLIENT_ID,
         clientSecret: e.DISCORD_CLIENT_SECRET,
-        authorization: { params: { scope: 'identify email' } },
+        // Auth.js v5 merges this object onto the default Discord provider
+        // shallowly. Overriding `authorization` here would wipe the default
+        // URL ("https://discord.com/api/oauth2/authorize?scope=identify+email")
+        // and Auth.js then throws `TypeError: Invalid URL` from `new URL(undefined)`.
+        // Defaults already include `identify email` scope, so no override needed.
       }),
     ],
     callbacks: {
