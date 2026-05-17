@@ -1,7 +1,7 @@
 # R1 — RC racing dashboard (Lap Monitor JSON ingestion)
 
 ## Author: claude-opus-4.7-r1-implementer
-## Status: Not Started
+## Status: Complete
 
 > First milestone outside the multi-game ELO core. Ingests Lap Monitor
 > JSON exports and surfaces a per-driver lap chart, leaderboards by
