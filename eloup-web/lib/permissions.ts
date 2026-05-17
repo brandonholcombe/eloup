@@ -16,11 +16,18 @@ export function canCreateGame(s: SessionPlayer | null): boolean {
   return s?.role === 'global_admin';
 }
 
+export function canUploadRaceResults(s: SessionPlayer | null): boolean {
+  return s?.role === 'global_admin';
+}
+
 export type AdminNavLink = { href: string; label: string };
 
 export function adminNavLinks(role: Role | undefined): AdminNavLink[] {
   if (role !== 'global_admin') return [];
-  return [{ href: '/games', label: 'Games' }];
+  return [
+    { href: '/games', label: 'Games' },
+    { href: '/racing/upload', label: 'Upload Race' },
+  ];
 }
 
 export function canEditMatch(

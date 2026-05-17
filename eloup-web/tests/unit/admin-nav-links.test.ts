@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest';
 import { adminNavLinks } from '@/lib/permissions';
 
 describe('adminNavLinks', () => {
-  it('returns the /games link for global_admin', () => {
-    expect(adminNavLinks('global_admin')).toEqual([{ href: '/games', label: 'Games' }]);
+  it('returns the admin links for global_admin', () => {
+    expect(adminNavLinks('global_admin')).toEqual([
+      { href: '/games', label: 'Games' },
+      { href: '/racing/upload', label: 'Upload Race' },
+    ]);
   });
 
   it('returns no links for plain users', () => {
