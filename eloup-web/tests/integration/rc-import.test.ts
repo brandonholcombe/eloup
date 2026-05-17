@@ -152,8 +152,9 @@ describe('importLapMonitorJson — happy path against the real fixture', () => {
 
     const brandon = initials.find((r) => r.display_name === 'Brandon');
     const willy = initials.find((r) => r.display_name === 'Willy');
-    expect(brandon?.end_timestamp_ms).toBe(165);
-    expect(willy?.end_timestamp_ms).toBe(2);
+    // Stored as centiseconds × 10 → milliseconds; JSON had 16.5 and 0.2 cs.
+    expect(brandon?.end_timestamp_ms).toBe(1650);
+    expect(willy?.end_timestamp_ms).toBe(20);
   });
 });
 
@@ -270,6 +271,63 @@ describe('importLapMonitorJson — whole-file-fatal validation', () => {
     const uploader = seedUploader(db);
     const result = importLapMonitorJson(db, loadFixture(), 'nope', uploader);
     expect(result.status).toBe('invalid');
+  });
+
+  it('lap_time_ms = JSON duration × 10 (Lap Monitor reports centiseconds)', () => {
+    // Magnitude regression guard. The invariant tests above (best_lap_ms ==
+    // MIN(lap_time_ms), placement ordering) would still pass even if every
+    // value were off by a constant factor — those checks are scale-invariant.
+    // This test pins the absolute conversion: a JSON duration of 2171cs must
+    // store as 21710ms, NOT 2171ms. RC racing laps are 17-30s; the wrong
+    // factor produced 2-3s laps in the first prod upload.
+    const db = freshDb();
+    const uploader = seedUploader(db);
+    const trackId = seedTrack(db);
+    const fixture = loadFixture() as {
+      races: Array<{
+        uuid: string;
+        drivers: Array<{
+          driverUuid: string;
+          name: string;
+          laps: Array<{ duration: number; endTimestamp: number; kind: string }>;
+        }>;
+      }>;
+    };
+    importLapMonitorJson(db, fixture, trackId, uploader);
+
+    // Pin a specific (race, driver, lap_index) → stored ms equals JSON cs × 10.
+    const firstRace = fixture.races[0]!;
+    const firstDriver = firstRace.drivers[0]!;
+    const firstNormalIdx = firstDriver.laps.findIndex((l) => l.kind === 'normal');
+    expect(firstNormalIdx).toBeGreaterThanOrEqual(0);
+    const jsonLap = firstDriver.laps[firstNormalIdx]!;
+
+    const stored = db
+      .prepare(
+        `SELECT l.lap_time_ms, l.end_timestamp_ms
+           FROM rc_laps l
+           JOIN rc_races r   ON r.id = l.race_id
+           JOIN rc_drivers d ON d.id = l.driver_id
+          WHERE r.lap_monitor_uuid = ?
+            AND d.lap_monitor_driver_uuid = ?
+            AND l.lap_index = ?`,
+      )
+      .get(firstRace.uuid, firstDriver.driverUuid, firstNormalIdx) as
+      | { lap_time_ms: number; end_timestamp_ms: number }
+      | undefined;
+    expect(stored).toBeDefined();
+    expect(stored!.lap_time_ms).toBe(jsonLap.duration * 10);
+    expect(stored!.end_timestamp_ms).toBe(jsonLap.endTimestamp * 10);
+
+    // Sanity-check that the overall magnitude is plausible for RC racing (10-60s).
+    const stats = db
+      .prepare(
+        `SELECT AVG(lap_time_ms) AS avg, MIN(lap_time_ms) AS min
+           FROM rc_laps WHERE lap_kind = 'normal'`,
+      )
+      .get() as { avg: number; min: number };
+    expect(stats.avg).toBeGreaterThan(10_000); // > 10s average rules out off-by-10 again
+    expect(stats.min).toBeGreaterThan(5_000); // > 5s shortest plausible RC lap
   });
 });
 

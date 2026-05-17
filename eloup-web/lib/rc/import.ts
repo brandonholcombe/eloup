@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
+// Lap Monitor encodes lap durations and endTimestamps as integer centiseconds
+// (1/100 second), not milliseconds. RC racing laps are typically 17-30 seconds;
+// a "duration: 2171" lap is 21.71s, not 2.171s. The DB columns are named
+// *_ms by contract, so we scale on the way in.
+const LAP_MONITOR_CS_TO_MS = 10;
+
 const LapSchema = z.object({
   kind: z.enum(['initial', 'normal', 'ignored']),
   duration: z.number().int().min(0),
@@ -177,8 +183,8 @@ export function importLapMonitorJson(
             driverId,
             i,
             lap.userIndex,
-            lap.duration,
-            lap.endTimestamp,
+            lap.duration * LAP_MONITOR_CS_TO_MS,
+            lap.endTimestamp * LAP_MONITOR_CS_TO_MS,
             lap.kind,
           );
           summary.lapsImported++;
@@ -226,12 +232,14 @@ function computeStandings(driverId: string, driver: DriverRow): DriverStandings 
   let bestLapMs: number | null = null;
   let totalTimeMs = 0;
   for (const lap of driver.laps) {
+    const lapMs = lap.duration * LAP_MONITOR_CS_TO_MS;
+    const endMs = lap.endTimestamp * LAP_MONITOR_CS_TO_MS;
     if (lap.kind === 'normal') {
       lapsCompleted++;
-      if (bestLapMs === null || lap.duration < bestLapMs) bestLapMs = lap.duration;
+      if (bestLapMs === null || lapMs < bestLapMs) bestLapMs = lapMs;
     }
     if (lap.kind === 'normal' || lap.kind === 'ignored') {
-      if (lap.endTimestamp > totalTimeMs) totalTimeMs = lap.endTimestamp;
+      if (endMs > totalTimeMs) totalTimeMs = endMs;
     }
   }
   return {
