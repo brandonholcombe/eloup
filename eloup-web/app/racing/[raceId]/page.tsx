@@ -6,6 +6,7 @@ import { LapChart, type LapChartDriver } from '@/components/LapChart';
 import { driverColor } from '@/lib/rc/colors';
 import { formatLapMs } from '@/lib/rc/format';
 import { DEFAULT_OUTLIER_MULTIPLIER, isLapOutlier } from '@/lib/rc/outliers';
+import { computeDriverStats, type DriverStats } from '@/lib/rc/stats';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,6 +119,14 @@ export default async function RaceDetailPage({
         <h2 className="text-lg font-medium">Lap-by-lap</h2>
         {standings.map((s) => {
           const driverLaps = laps.filter((l) => l.driver_id === s.driver_id);
+          const stats = computeDriverStats(
+            driverLaps.map((l) => ({
+              lapTimeMs: l.lap_time_ms,
+              lapKind: l.lap_kind,
+              lapNumber: l.lap_number ?? l.lap_index,
+            })),
+            s.best_lap_ms,
+          );
           return (
             <details key={s.driver_id} className="rounded-md border border-slate-800 bg-slate-900">
               <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm">
@@ -129,6 +138,7 @@ export default async function RaceDetailPage({
                 <span className="font-medium">{s.display_name}</span>
                 <span className="ml-auto text-xs text-slate-400">{driverLaps.length} entries</span>
               </summary>
+              <DriverStatGrid stats={stats} />
               <table className="w-full border-t border-slate-800 text-xs">
                 <thead>
                   <tr className="text-left text-slate-400">
@@ -179,6 +189,46 @@ export default async function RaceDetailPage({
       </section>
     </main>
   );
+}
+
+function DriverStatGrid({ stats }: { stats: DriverStats }) {
+  const items: Array<{ label: string; value: string; sub?: string }> = [
+    { label: 'Best', value: optional(stats.bestMs) },
+    {
+      label: 'Average',
+      value: optional(stats.avgMs),
+      sub: stats.hiddenOutliers > 0 ? `${stats.hiddenOutliers} excl.` : undefined,
+    },
+    { label: 'Top 3 avg', value: optional(stats.top3AvgMs) },
+    { label: 'Top 5 avg', value: optional(stats.top5AvgMs) },
+    { label: 'Median', value: optional(stats.medianMs) },
+    {
+      label: 'Consistency',
+      value: stats.consistencyMs == null ? '—' : `± ${formatLapMs(stats.consistencyMs)}`,
+    },
+    { label: 'First lap', value: optional(stats.firstLapMs) },
+    { label: 'Counted', value: String(stats.countedLaps) },
+  ];
+  return (
+    <dl className="grid grid-cols-2 gap-1 border-t border-slate-800 bg-slate-950 p-2 text-xs sm:grid-cols-4">
+      {items.map((it) => (
+        <div
+          key={it.label}
+          className="rounded border border-slate-800 bg-slate-900 px-2 py-1.5"
+        >
+          <dt className="text-[10px] uppercase tracking-wide text-slate-500">{it.label}</dt>
+          <dd className="mt-0.5 flex items-baseline gap-1 font-mono tabular-nums text-slate-100">
+            <span>{it.value}</span>
+            {it.sub && <span className="text-[9px] text-slate-500">{it.sub}</span>}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function optional(ms: number | null): string {
+  return ms == null ? '—' : formatLapMs(ms);
 }
 
 function formatDateTime(iso: string): string {
