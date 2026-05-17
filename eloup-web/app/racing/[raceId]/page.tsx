@@ -5,6 +5,7 @@ import { getRace, lapsForRace, standingsForRace } from '@/lib/db/rc';
 import { LapChart, type LapChartDriver } from '@/components/LapChart';
 import { driverColor } from '@/lib/rc/colors';
 import { formatLapMs } from '@/lib/rc/format';
+import { DEFAULT_OUTLIER_MULTIPLIER, isLapOutlier } from '@/lib/rc/outliers';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,13 +22,25 @@ export default async function RaceDetailPage({
   const standings = standingsForRace(handle, race.id);
   const laps = lapsForRace(handle, race.id);
 
-  const chartData: LapChartDriver[] = standings.map((s) => ({
-    driverId: s.driver_id,
-    displayName: s.display_name,
-    laps: laps
-      .filter((l) => l.driver_id === s.driver_id && l.lap_kind === 'normal')
-      .map((l) => ({ lapNumber: l.lap_number ?? l.lap_index, lapTimeMs: l.lap_time_ms })),
-  }));
+  const bestByDriver = new Map(standings.map((s) => [s.driver_id, s.best_lap_ms]));
+  let outlierCount = 0;
+  const chartData: LapChartDriver[] = standings.map((s) => {
+    const best = bestByDriver.get(s.driver_id) ?? null;
+    return {
+      driverId: s.driver_id,
+      displayName: s.display_name,
+      laps: laps
+        .filter((l) => l.driver_id === s.driver_id && l.lap_kind === 'normal')
+        .filter((l) => {
+          if (isLapOutlier(l.lap_time_ms, best)) {
+            outlierCount++;
+            return false;
+          }
+          return true;
+        })
+        .map((l) => ({ lapNumber: l.lap_number ?? l.lap_index, lapTimeMs: l.lap_time_ms })),
+    };
+  });
 
   return (
     <main className="p-4">
@@ -50,6 +63,11 @@ export default async function RaceDetailPage({
 
       <section className="mt-4">
         <LapChart drivers={chartData} />
+        <p className="mt-1 text-[11px] text-slate-500">
+          Laps over {DEFAULT_OUTLIER_MULTIPLIER}× a driver&apos;s fastest are hidden from the chart
+          as crashes / resets
+          {outlierCount > 0 ? ` (${outlierCount} hidden)` : ''}. Full lap-by-lap table is below.
+        </p>
       </section>
 
       <section className="mt-6">
@@ -121,26 +139,38 @@ export default async function RaceDetailPage({
                   </tr>
                 </thead>
                 <tbody>
-                  {driverLaps.map((l) => (
-                    <tr
-                      key={l.lap_index}
-                      className={
-                        'border-t border-slate-800 ' +
-                        (l.lap_kind === 'ignored' ? 'text-slate-500' : '')
-                      }
-                    >
-                      <td className="px-3 py-1 font-mono">
-                        {l.lap_kind === 'normal' ? l.lap_number : '—'}
-                      </td>
-                      <td className="px-3 py-1">{l.lap_kind}</td>
-                      <td className="px-3 py-1 text-right font-mono tabular-nums">
-                        {formatLapMs(l.lap_time_ms)}
-                      </td>
-                      <td className="px-3 py-1 text-right font-mono tabular-nums">
-                        {formatLapMs(l.end_timestamp_ms)}
-                      </td>
-                    </tr>
-                  ))}
+                  {driverLaps.map((l) => {
+                    const isOutlier =
+                      l.lap_kind === 'normal' && isLapOutlier(l.lap_time_ms, s.best_lap_ms);
+                    const faded = l.lap_kind === 'ignored' || isOutlier;
+                    return (
+                      <tr
+                        key={l.lap_index}
+                        className={'border-t border-slate-800 ' + (faded ? 'text-slate-500' : '')}
+                      >
+                        <td className="px-3 py-1 font-mono">
+                          {l.lap_kind === 'normal' ? l.lap_number : '—'}
+                        </td>
+                        <td className="px-3 py-1">
+                          {l.lap_kind}
+                          {isOutlier && (
+                            <span
+                              className="ml-1 text-amber-500"
+                              title={`> ${DEFAULT_OUTLIER_MULTIPLIER}× fastest — hidden from chart`}
+                            >
+                              ⚑ outlier
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-3 py-1 text-right font-mono tabular-nums">
+                          {formatLapMs(l.lap_time_ms)}
+                        </td>
+                        <td className="px-3 py-1 text-right font-mono tabular-nums">
+                          {formatLapMs(l.end_timestamp_ms)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </details>
