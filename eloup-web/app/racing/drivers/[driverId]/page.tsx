@@ -1,0 +1,121 @@
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { db } from '@/lib/db/client';
+import {
+  getDriver,
+  perTrackBestsForDriver,
+  recentRacesForDriver,
+} from '@/lib/db/rc';
+import { driverColor } from '@/lib/rc/colors';
+import { formatLapMs } from '@/lib/rc/format';
+
+export const dynamic = 'force-dynamic';
+
+export default async function DriverProfilePage({
+  params,
+}: {
+  params: Promise<{ driverId: string }>;
+}) {
+  const { driverId } = await params;
+  const handle = db();
+  const driver = getDriver(handle, driverId);
+  if (!driver) notFound();
+  const linkedPlayer = driver.player_id
+    ? (handle
+        .prepare(`SELECT id, display_name, discord_handle FROM players WHERE id = ?`)
+        .get(driver.player_id) as
+        | { id: string; display_name: string; discord_handle: string }
+        | undefined)
+    : undefined;
+  const recent = recentRacesForDriver(handle, driver.id);
+  const bestsPerTrack = perTrackBestsForDriver(handle, driver.id);
+
+  return (
+    <main className="p-4">
+      <Link href="/racing" className="text-sm text-slate-400 hover:text-slate-200">
+        ← All races
+      </Link>
+      <div className="mt-2 flex items-center gap-3">
+        <span
+          aria-hidden
+          className="inline-block h-4 w-4 rounded-full"
+          style={{ background: driverColor(driver.id) }}
+        />
+        <h1 className="text-2xl font-semibold">{driver.display_name}</h1>
+      </div>
+      {linkedPlayer ? (
+        <p className="mt-1 text-sm text-slate-400">
+          Linked to <Link href="/profile" className="text-blue-400 hover:text-blue-300">@{linkedPlayer.discord_handle}</Link>
+        </p>
+      ) : (
+        <p className="mt-1 text-xs text-slate-500">No Discord linkage — RC-local profile.</p>
+      )}
+
+      <section className="mt-6">
+        <h2 className="text-lg font-medium">Best lap per track</h2>
+        {bestsPerTrack.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-400">No normal laps recorded.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {bestsPerTrack.map((b) => (
+              <li
+                key={b.track_id}
+                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+              >
+                <Link
+                  href={`/racing/tracks/${encodeURIComponent(b.track_slug)}`}
+                  className="hover:text-slate-100"
+                >
+                  {b.track_name}
+                </Link>
+                <span className="font-mono tabular-nums">{formatLapMs(b.best_lap_ms)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-lg font-medium">Recent races</h2>
+        {recent.length === 0 ? (
+          <p className="mt-2 text-sm text-slate-400">No races yet.</p>
+        ) : (
+          <ul className="mt-2 space-y-2">
+            {recent.map((r) => (
+              <li
+                key={r.race_id}
+                className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+              >
+                <Link href={`/racing/${r.race_id}`} className="block">
+                  <div className="flex items-baseline justify-between">
+                    <span className="font-medium">{r.race_name ?? r.race_kind}</span>
+                    <span className="font-mono text-xs text-slate-400">
+                      #{r.placement} · {r.laps_completed} laps
+                    </span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
+                    <span>{r.track_name}</span>
+                    <span className="text-slate-600">·</span>
+                    <time>{formatDate(r.race_started_at)}</time>
+                    {r.best_lap_ms != null && (
+                      <>
+                        <span className="text-slate-600">·</span>
+                        <span className="font-mono">best {formatLapMs(r.best_lap_ms)}</span>
+                      </>
+                    )}
+                  </div>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function formatDate(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString();
+}

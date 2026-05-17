@@ -1,6 +1,6 @@
 {
-  "root": "15c5e63797cf7046",
-  "generated": "2026-05-16T06:13:48Z",
+  "root": "fe08bde05775165f",
+  "generated": "2026-05-17T16:51:04Z",
   "status": "aligned",
   "symbols": {
     "app": {
@@ -64,6 +64,17 @@
         "architecture.image_registry == expects_image_registry": "PASS",
         "architecture.image_arch == expects_image_arch": "PASS"
       }
+    },
+    "racing": {
+      "hash": "263b5dcc1698d8ff",
+      "means": "racing: anonymous_view=True, chart_strategy=svg_inline, driver_identity_model=separate_with_optional_player_link, elo_integrated=False, ingest_mode=batch_upload, source=lap_monitor, track_model=operator_specified_at_upload, upload_role=global_admin",
+      "docs": {
+        "docs/racing.md": {
+          "hash": "b72f7e3f314af62e",
+          "status": "current"
+        }
+      },
+      "interlocks": {}
     },
     "rating": {
       "hash": "02d9c2415171c729",

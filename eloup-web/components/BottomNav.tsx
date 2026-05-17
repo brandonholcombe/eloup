@@ -2,11 +2,12 @@ import Link from 'next/link';
 import { auth, signIn } from '@/lib/auth';
 
 const ITEMS: {
-  href: '/leaderboards' | '/matches' | '/tournaments' | '/profile';
+  href: '/leaderboards' | '/racing' | '/matches' | '/tournaments' | '/profile';
   label: string;
   icon: string;
 }[] = [
   { href: '/leaderboards', label: 'Boards', icon: '🏆' },
+  { href: '/racing', label: 'Racing', icon: '🏎️' },
   { href: '/matches', label: 'Matches', icon: '🎲' },
   { href: '/tournaments', label: 'Cups', icon: '🏁' },
   { href: '/profile', label: 'Me', icon: '👤' },

@@ -113,6 +113,21 @@
       },
       "interlocks": {}
     },
+    "racing": {
+      "description": "RC-car racing dashboard backed by Lap Monitor JSON exports. Display-only in R1: per-driver lap chart, per-track best-lap leaderboards, driver profiles. Driver identity is decoupled from players via a stable lap_monitor_driver_uuid with an optional players.id link. ELO integration is deferred to R2.",
+      "docs": ["docs/racing.md"],
+      "properties": {
+        "source": "lap_monitor",
+        "ingest_mode": "batch_upload",
+        "track_model": "operator_specified_at_upload",
+        "driver_identity_model": "separate_with_optional_player_link",
+        "chart_strategy": "svg_inline",
+        "elo_integrated": false,
+        "upload_role": "global_admin",
+        "anonymous_view": true
+      },
+      "interlocks": {}
+    },
     "app": {
       "description": "Next.js 15 App Router PWA. Tailwind + hand-written components (no shadcn-CLI dependency); better-sqlite3 direct (no ORM) with versioned .sql migrations in lib/db/migrations/; Auth.js v5 for Discord OAuth (JWT sessions, trustHost: true for self-hosted ingress); hand-rolled service worker + manifest.webmanifest for PWA install; leaderboards are anonymous-visible (Q-APP-4 default).",
       "docs": ["docs/app.md"],
