@@ -1,16 +1,17 @@
 import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
+import {
+  playerCategoryRatings,
+  playerGameRatings,
+  type GameRating,
+} from '@/lib/db/queries';
+import { categoryLabel } from '@/lib/games/categories';
 import { adminNavLinks } from '@/lib/permissions';
 
 export const dynamic = 'force-dynamic';
 
 type OverallRow = { current_rating: number; escrowed_elo: number };
-type PerGameRow = {
-  game_name: string;
-  current_rating: number;
-  games_played: number;
-};
 type RecentRow = {
   match_id: string;
   game_name: string;
@@ -18,6 +19,17 @@ type RecentRow = {
   rating_delta: number | null;
   placement: number | null;
 };
+
+// Group rows by category preserving the existing iteration order (the
+// rows are already sorted by category then name in SQL — see
+// playerGameRatings). Plain `reduce` rather than `Object.groupBy`, which
+// requires Node 21+; the runtime target for this app is Node 20.
+function groupByCategory(rows: GameRating[]): Record<string, GameRating[]> {
+  return rows.reduce<Record<string, GameRating[]>>((acc, r) => {
+    (acc[r.category] ??= []).push(r);
+    return acc;
+  }, {});
+}
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -28,14 +40,8 @@ export default async function ProfilePage() {
   const overall = handle
     .prepare(`SELECT current_rating, escrowed_elo FROM overall_ratings WHERE player_id = ?`)
     .get(playerId) as OverallRow | undefined;
-  const perGame = handle
-    .prepare(
-      `SELECT g.name AS game_name, r.current_rating, r.games_played
-         FROM ratings r JOIN games g ON g.id = r.game_id
-        WHERE r.player_id = ?
-        ORDER BY r.current_rating DESC`,
-    )
-    .all(playerId) as PerGameRow[];
+  const categoryRollup = playerCategoryRatings(handle, playerId);
+  const games = playerGameRatings(handle, playerId);
   const recent = handle
     .prepare(
       `SELECT mp.match_id, g.name AS game_name, m.status, mp.rating_delta, mp.placement
@@ -66,23 +72,53 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Per-game</h2>
-        {perGame.length === 0 ? (
+        <h2 className="text-sm uppercase tracking-wide text-slate-500">By category</h2>
+        {categoryRollup.length === 0 ? (
           <p className="mt-2 text-slate-400">No games played yet.</p>
         ) : (
           <ul className="mt-2 space-y-2">
-            {perGame.map((r) => (
+            {categoryRollup.map((c) => (
               <li
-                key={r.game_name}
+                key={c.category}
                 className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
               >
-                <span>{r.game_name}</span>
+                <span>{c.label}</span>
                 <span className="font-mono tabular-nums">
-                  {Math.round(r.current_rating)} · {r.games_played}g
+                  {c.weightedRating} · {c.gameCount} games · {c.totalMatches} matches
                 </span>
               </li>
             ))}
           </ul>
+        )}
+      </section>
+
+      <section className="mt-6">
+        <h2 className="text-sm uppercase tracking-wide text-slate-500">Games</h2>
+        {games.length === 0 ? (
+          <p className="mt-2 text-slate-400">No games played yet.</p>
+        ) : (
+          <div className="mt-2 space-y-3">
+            {Object.entries(groupByCategory(games)).map(([slug, rows]) => (
+              <div key={slug}>
+                <h3 className="text-xs uppercase tracking-wide text-slate-600">
+                  {categoryLabel(slug)}
+                </h3>
+                <ul className="mt-1 space-y-1">
+                  {rows.map((r) => (
+                    <li
+                      key={r.gameId}
+                      className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                    >
+                      <span>{r.gameName}</span>
+                      <span className="font-mono tabular-nums">
+                        {Math.round(r.currentRating)} · {r.gamesPlayed}g
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 

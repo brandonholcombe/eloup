@@ -437,6 +437,68 @@ export function recentRacesForDriver(
     .all(driverId, limit) as RcDriverRecentRaceRow[];
 }
 
+export type DriverWinLossRow = {
+  raceKind: 'race' | 'qualif' | 'practice' | 'all';
+  totalRaces: number;
+  wins: number;
+  podiums: number;
+};
+
+// H7 — Career win/loss stats per race_kind plus an `all` totals row.
+//
+// Always returns 4 rows in deterministic order (race, qualif,
+// practice, all). Drivers with zero races in a kind get a zero row
+// rather than a gap — operators expect a stable 4-row display.
+//
+// Totals are computed in JS over the in-memory per-kind result rather
+// than via a SQL UNION ALL: the per-kind aggregation already executes
+// the GROUP BY, and a UNION ALL would re-scan rc_race_drivers for the
+// totals row — wasted work given how cheap the JS sum is.
+//
+// `placement <= 3` is inclusive of wins (a win is also a podium) —
+// that's the convention the UI surfaces. `placement = NULL` (defensive;
+// H4's hard-delete doesn't produce NULL placements) evaluates the CASE
+// to ELSE under SQLite three-valued logic, contributing 0.
+export function driverWinLossStats(
+  db: Database.Database,
+  driverId: string,
+): DriverWinLossRow[] {
+  const rows = db
+    .prepare(
+      `SELECT r.race_kind AS race_kind,
+              COUNT(*) AS total_races,
+              SUM(CASE WHEN rd.placement = 1 THEN 1 ELSE 0 END) AS wins,
+              SUM(CASE WHEN rd.placement <= 3 THEN 1 ELSE 0 END) AS podiums
+         FROM rc_race_drivers rd
+         JOIN rc_races r ON r.id = rd.race_id
+        WHERE rd.driver_id = ?
+        GROUP BY r.race_kind`,
+    )
+    .all(driverId) as Array<{
+    race_kind: 'race' | 'qualif' | 'practice';
+    total_races: number;
+    wins: number;
+    podiums: number;
+  }>;
+
+  const byKind = new Map(rows.map((r) => [r.race_kind, r]));
+  const ordered: DriverWinLossRow[] = (['race', 'qualif', 'practice'] as const).map(
+    (k) => {
+      const r = byKind.get(k);
+      return r
+        ? { raceKind: k, totalRaces: r.total_races, wins: r.wins, podiums: r.podiums }
+        : { raceKind: k, totalRaces: 0, wins: 0, podiums: 0 };
+    },
+  );
+  const totals: DriverWinLossRow = {
+    raceKind: 'all',
+    totalRaces: ordered.reduce((a, r) => a + r.totalRaces, 0),
+    wins: ordered.reduce((a, r) => a + r.wins, 0),
+    podiums: ordered.reduce((a, r) => a + r.podiums, 0),
+  };
+  return [...ordered, totals];
+}
+
 export function perTrackBestsForDriver(
   db: Database.Database,
   driverId: string,

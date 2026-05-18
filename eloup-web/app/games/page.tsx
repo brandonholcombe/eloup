@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { listGames } from '@/lib/db/queries';
 import { NewGameForm } from '@/components/NewGameForm';
+import { GameCategoryEditor } from '@/components/GameCategoryEditor';
 import { InfoTip } from '@/components/InfoTip';
 
 export const dynamic = 'force-dynamic';
@@ -32,7 +33,7 @@ export default async function GamesPage() {
             {games.map((g) => (
               <li
                 key={g.id}
-                className="flex items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
               >
                 <span className="inline-flex items-center">
                   {g.name}{' '}
@@ -58,6 +59,7 @@ export default async function GamesPage() {
                     default is 32; lower values are more conservative.
                   </InfoTip>
                 </span>
+                <GameCategoryEditor gameId={g.id} currentCategory={g.category} />
               </li>
             ))}
           </ul>

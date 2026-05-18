@@ -144,7 +144,8 @@
         "anonymous_leaderboards": true,
         "first_admin_bootstrap": "env_discord_id_optional",
         "test_runner": "vitest",
-        "e2e_runner": "playwright"
+        "e2e_runner": "playwright",
+        "game_categories_count": 8
       },
       "interlocks": {}
     }

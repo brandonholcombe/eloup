@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import {
+  driverWinLossStats,
   getDriverWithLinkedPlayer,
   perTrackBestsForDriver,
   recentRacesForDriver,
@@ -27,6 +28,7 @@ export default async function DriverProfilePage({
   const isAdmin = session?.user?.role === 'global_admin';
   const recent = recentRacesForDriver(handle, driver.id);
   const bestsPerTrack = perTrackBestsForDriver(handle, driver.id);
+  const winLoss = driverWinLossStats(handle, driver.id);
 
   const isLinked = driver.player_id != null && driver.linked_discord_handle != null;
 
@@ -69,6 +71,38 @@ export default async function DriverProfilePage({
           }
         />
       )}
+
+      <section className="mt-6">
+        <h2 className="text-lg font-medium">Career stats</h2>
+        <table className="mt-2 w-full border-separate border-spacing-y-1 text-xs">
+          <thead>
+            <tr className="text-slate-500">
+              <th className="text-left font-normal">Kind</th>
+              <th className="text-right font-normal">Races</th>
+              <th className="text-right font-normal">Wins</th>
+              <th className="text-right font-normal">Podiums</th>
+            </tr>
+          </thead>
+          <tbody>
+            {winLoss.map((row) => (
+              <tr key={row.raceKind}>
+                <td className="rounded-l-md border-y border-l border-slate-800 bg-slate-900 px-2 py-1 text-slate-400">
+                  {row.raceKind}
+                </td>
+                <td className="border-y border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+                  {row.totalRaces}
+                </td>
+                <td className="border-y border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+                  {row.wins}
+                </td>
+                <td className="rounded-r-md border-y border-r border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+                  {row.podiums}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
 
       <section className="mt-6">
         <h2 className="text-lg font-medium">Best lap per track</h2>

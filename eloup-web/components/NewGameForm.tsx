@@ -2,6 +2,10 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  GAME_CATEGORIES,
+  type GameCategorySlug,
+} from '@/lib/games/categories';
 
 export function NewGameForm() {
   const router = useRouter();
@@ -11,6 +15,7 @@ export function NewGameForm() {
   const [min, setMin] = useState(2);
   const [max, setMax] = useState(2);
   const [k, setK] = useState(32);
+  const [category, setCategory] = useState<GameCategorySlug>('other');
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
   return (
@@ -30,6 +35,7 @@ export function NewGameForm() {
               min_participants: min,
               max_participants: max,
               default_k: k,
+              category,
             }),
           });
           if (!resp.ok) {
@@ -68,6 +74,18 @@ export function NewGameForm() {
         <option value="1v1">1v1</option>
         <option value="team">team</option>
         <option value="ffa">ffa</option>
+      </select>
+      <select
+        value={category}
+        onChange={(e) => setCategory(e.target.value as GameCategorySlug)}
+        className="block w-full h-tap rounded-md border border-slate-700 bg-slate-900 px-2 text-sm"
+        aria-label="category"
+      >
+        {GAME_CATEGORIES.map((c) => (
+          <option key={c.slug} value={c.slug}>
+            {c.label}
+          </option>
+        ))}
       </select>
       <div className="grid grid-cols-3 gap-2">
         <label className="text-xs text-slate-400">

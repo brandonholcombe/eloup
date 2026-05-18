@@ -7,6 +7,7 @@ import { applyMigrations } from '@/lib/db/migrate';
 import { importLapMonitorJson } from '@/lib/rc/import';
 import {
   bestLapsForTrack,
+  driverWinLossStats,
   getRace,
   lapsForRace,
   listDrivers,
@@ -134,5 +135,27 @@ describe('rc query helpers', () => {
     const db = setup();
     const tracks = listTracks(db);
     expect(tracks.map((t) => t.slug).sort()).toEqual(['track-a', 'track-b']);
+  });
+
+  it('driverWinLossStats aggregates seeded race outcomes per kind + totals', () => {
+    const db = setup();
+    // The lap-monitor fixture seeds 15 races all of one kind. Just
+    // sanity-check the totals row sums the per-kind rows for the first
+    // driver across the entire dataset.
+    const driverId = listDrivers(db)[0]!.id;
+    const rows = driverWinLossStats(db, driverId);
+    expect(rows.map((r) => r.raceKind)).toEqual(['race', 'qualif', 'practice', 'all']);
+    const byKind = Object.fromEntries(rows.map((r) => [r.raceKind, r]));
+    expect(byKind.all!.totalRaces).toBe(
+      byKind.race!.totalRaces + byKind.qualif!.totalRaces + byKind.practice!.totalRaces,
+    );
+    expect(byKind.all!.wins).toBe(
+      byKind.race!.wins + byKind.qualif!.wins + byKind.practice!.wins,
+    );
+    expect(byKind.all!.podiums).toBe(
+      byKind.race!.podiums + byKind.qualif!.podiums + byKind.practice!.podiums,
+    );
+    // Driver played in at least one of the kinds.
+    expect(byKind.all!.totalRaces).toBeGreaterThan(0);
   });
 });

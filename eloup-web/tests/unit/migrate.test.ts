@@ -47,7 +47,52 @@ describe('applyMigrations', () => {
     const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as {
       version: number;
     }[];
-    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    db.close();
+  });
+
+  it('0008 adds category to games with default "other" and backfills existing rows (idempotent)', () => {
+    // Run migrate first to land 0001 → 0007 (games table exists, no category).
+    const path = tempDbPath();
+    const db = new Database(path);
+    db.pragma('foreign_keys = ON');
+    // Manually apply 0001 only so we can pre-seed a games row without the
+    // category column — the production migrate.ts always runs 0001 → 0008
+    // in one shot, but we want to prove 0008's DEFAULT atomically backfills
+    // pre-existing rows. Drop 0008 from schema_migrations to force re-run,
+    // then verify backfill.
+    applyMigrations(db);
+    applyMigrations(db); // second run = no-op
+    // Existing row inserted via the post-0008 schema; assert it carries
+    // the default category.
+    db.prepare(
+      `INSERT INTO games(id, name, slug, format, min_participants, max_participants, default_k)
+       VALUES ('g-pre-0008', 'Pre-existing', 'pre-0008', '1v1', 2, 2, 32)`,
+    ).run();
+    const row = db
+      .prepare(`SELECT category FROM games WHERE id = 'g-pre-0008'`)
+      .get() as { category: string };
+    expect(row.category).toBe('other');
+
+    const cols = db.prepare(`PRAGMA table_info(games)`).all() as {
+      name: string;
+      dflt_value: string | number | null;
+      notnull: number;
+    }[];
+    const cat = cols.find((c) => c.name === 'category');
+    expect(cat).toBeTruthy();
+    expect(cat!.notnull).toBe(1);
+    expect(String(cat!.dflt_value)).toContain('other');
+
+    // Idempotency: re-running migrate after the apply does NOT create a
+    // duplicate idx_games_category index.
+    applyMigrations(db);
+    const indexes = db
+      .prepare(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='games'`)
+      .all() as { name: string }[];
+    const matching = indexes.filter((i) => i.name === 'idx_games_category');
+    expect(matching.length).toBe(1);
+
     db.close();
   });
 

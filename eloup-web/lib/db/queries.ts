@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Role } from '@/lib/permissions';
+import { categoryLabel } from '@/lib/games/categories';
 
 export type PlayerRow = {
   id: string;
@@ -21,6 +22,7 @@ export type GameRow = {
   format: '1v1' | 'ffa' | 'team';
   min_participants: number;
   max_participants: number;
+  category: string;
   created_at: string;
 };
 
@@ -82,6 +84,108 @@ export type PlayerSearchHit = {
   discord_handle: string;
   avatar_url: string | null;
 };
+
+export type CategoryRollup = {
+  category: string;
+  label: string;
+  weightedRating: number;
+  gameCount: number;
+  totalMatches: number;
+};
+
+// Weighted-average rating per category for one player.
+//
+// `SUM(current_rating * games_played) / SUM(games_played)` gives a
+// matches-weighted average across all games in a category — a player
+// with 10 matches at 1500 and 1 match at 1100 sits closer to 1500.
+//
+// Zero-match games are excluded (`r.games_played > 0`). A category that
+// only holds zero-match games would otherwise divide by zero (SQLite
+// returns NULL). The asymmetry with `playerGameRatings` (which DOES
+// list zero-match games) is intentional: the per-game list is a
+// registry ("which games does this player have a ratings row for?"),
+// the rollup is a score ("how is this player doing in this category?"),
+// and a starter 1200 with 0 matches would inject noise into the score.
+//
+// `CAST(ROUND(...) AS INTEGER)` returns SQLite's banker's rounding —
+// `ROUND(1350.5) = 1350` (round-half-to-even). Tests pin this.
+export function playerCategoryRatings(
+  db: Database.Database,
+  playerId: string,
+): CategoryRollup[] {
+  const rows = db
+    .prepare(
+      `SELECT g.category AS category,
+              CAST(ROUND(SUM(r.current_rating * r.games_played) / SUM(r.games_played)) AS INTEGER) AS rating,
+              COUNT(*) AS game_count,
+              SUM(r.games_played) AS total_matches
+         FROM ratings r
+         JOIN games g ON g.id = r.game_id
+        WHERE r.player_id = ?
+          AND r.games_played > 0
+        GROUP BY g.category
+        ORDER BY rating DESC`,
+    )
+    .all(playerId) as Array<{
+    category: string;
+    rating: number;
+    game_count: number;
+    total_matches: number;
+  }>;
+  return rows.map((r) => ({
+    category: r.category,
+    label: categoryLabel(r.category),
+    weightedRating: r.rating,
+    gameCount: r.game_count,
+    totalMatches: r.total_matches,
+  }));
+}
+
+export type GameRating = {
+  gameId: string;
+  gameName: string;
+  category: string;
+  currentRating: number;
+  gamesPlayed: number;
+};
+
+// Per-game rating list for one player, ordered by category then game
+// name so the profile page can group rows in a single linear pass.
+//
+// Includes zero-match games — unlike `playerCategoryRatings`, which
+// excludes them. See the comment on `playerCategoryRatings` for the
+// rationale on the intentional asymmetry.
+export function playerGameRatings(
+  db: Database.Database,
+  playerId: string,
+): GameRating[] {
+  const rows = db
+    .prepare(
+      `SELECT g.id   AS game_id,
+              g.name AS game_name,
+              g.category,
+              r.current_rating,
+              r.games_played
+         FROM ratings r
+         JOIN games g ON g.id = r.game_id
+        WHERE r.player_id = ?
+        ORDER BY g.category, g.name`,
+    )
+    .all(playerId) as Array<{
+    game_id: string;
+    game_name: string;
+    category: string;
+    current_rating: number;
+    games_played: number;
+  }>;
+  return rows.map((r) => ({
+    gameId: r.game_id,
+    gameName: r.game_name,
+    category: r.category,
+    currentRating: r.current_rating,
+    gamesPlayed: r.games_played,
+  }));
+}
 
 // Case-insensitive substring search on display_name OR discord_handle.
 // Empty / whitespace-only query short-circuits to [] so the result list
