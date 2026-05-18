@@ -1,7 +1,7 @@
 # H6 — Race-kind-aware ranking + void-laps admin action
 
 ## Author: claude-opus-4.7-h6-implementer
-## Status: In Progress
+## Status: Complete
 
 ## Reviewer findings folded (2026-05-17)
 
