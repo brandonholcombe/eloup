@@ -1,7 +1,7 @@
 # H4 — Race deletion + penalty UX hint
 
 ## Author: claude-opus-4.7-h4-implementer
-## Status: In Progress
+## Status: Complete
 
 ## Reviewer notes folded in (post-review, 2026-05-17)
 
