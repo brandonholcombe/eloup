@@ -1,8 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
-import { getRace, lapsForRace, standingsForRace } from '@/lib/db/rc';
+import { getRace, lapsForRace, listTracks, standingsForRace } from '@/lib/db/rc';
 import { LapChart, type LapChartDriver } from '@/components/LapChart';
+import { RaceAdminPanel } from '@/components/RaceAdminPanel';
 import { driverColor } from '@/lib/rc/colors';
 import { formatLapMs } from '@/lib/rc/format';
 import { DEFAULT_OUTLIER_MULTIPLIER, isLapOutlier } from '@/lib/rc/outliers';
@@ -20,8 +22,13 @@ export default async function RaceDetailPage({
   const race = getRace(handle, raceId);
   if (!race) notFound();
 
+  const session = await auth();
+  const isAdmin = session?.user?.role === 'global_admin';
+
   const standings = standingsForRace(handle, race.id);
   const laps = lapsForRace(handle, race.id);
+  const hasPenalty = standings.some((s) => s.penalty_ms > 0);
+  const tracks = isAdmin ? listTracks(handle) : [];
 
   const bestByDriver = new Map(standings.map((s) => [s.driver_id, s.best_lap_ms]));
   let outlierCount = 0;
@@ -80,6 +87,7 @@ export default async function RaceDetailPage({
               <th className="py-2 pr-2">Driver</th>
               <th className="py-2 pr-2 text-right">Laps</th>
               <th className="py-2 pr-2 text-right">Best</th>
+              <th className="py-2 pr-2 text-right">Penalty</th>
               <th className="py-2 pr-0 text-right">Total</th>
             </tr>
           </thead>
@@ -106,14 +114,37 @@ export default async function RaceDetailPage({
                 <td className="py-2 pr-2 text-right font-mono tabular-nums">
                   {s.best_lap_ms != null ? formatLapMs(s.best_lap_ms) : '—'}
                 </td>
+                <td className="py-2 pr-2 text-right font-mono tabular-nums">
+                  {s.penalty_ms > 0 ? (
+                    <span className="text-amber-400">+{(s.penalty_ms / 1000).toFixed(1)}s</span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
                 <td className="py-2 pr-0 text-right font-mono tabular-nums">
-                  {formatLapMs(s.total_time_ms)}
+                  {formatLapMs(s.adjusted_total_time_ms)}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        {hasPenalty && (
+          <p className="mt-1 text-[11px] text-slate-500">Total includes penalty.</p>
+        )}
       </section>
+
+      {isAdmin && (
+        <RaceAdminPanel
+          raceId={race.id}
+          currentTrackId={race.track_id}
+          tracks={tracks.map((t) => ({ id: t.id, name: t.name }))}
+          drivers={standings.map((s) => ({
+            driverId: s.driver_id,
+            displayName: s.display_name,
+            penaltyMs: s.penalty_ms,
+          }))}
+        />
+      )}
 
       <section className="mt-6 space-y-4">
         <h2 className="text-lg font-medium">Lap-by-lap</h2>

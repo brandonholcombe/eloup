@@ -7,11 +7,13 @@ import { applyMigrations } from '@/lib/db/migrate';
 import { importLapMonitorJson } from '@/lib/rc/import';
 import {
   bestLapsForTrack,
+  lapsForRace,
   listRaces,
   setDriverPenalty,
   setRaceTrack,
   standingsForRace,
 } from '@/lib/db/rc';
+import { computeDriverStats } from '@/lib/rc/stats';
 
 const FIXTURE_PATH = join(
   __dirname,
@@ -94,6 +96,40 @@ describe('rc admin edits — end-to-end', () => {
     // lap times, track-b gains them.
     const bTrackB = bestLapsForTrack(db, 'track-b');
     expect(bTrackB.length).toBeGreaterThan(0);
+  });
+
+  it('per-driver stats (computeDriverStats) are identical before and after penalty', () => {
+    const { db } = setup();
+    const race = listRaces(db)[14]!;
+    const before = standingsForRace(db, race.id);
+    const leader = before.find((s) => s.placement === 1)!;
+    const laps = lapsForRace(db, race.id).filter((l) => l.driver_id === leader.driver_id);
+    const statsBefore = computeDriverStats(
+      laps.map((l) => ({
+        lapTimeMs: l.lap_time_ms,
+        lapKind: l.lap_kind,
+        lapNumber: l.lap_number ?? l.lap_index,
+      })),
+      leader.best_lap_ms,
+    );
+
+    setDriverPenalty(db, race.id, leader.driver_id, 7500);
+
+    const lapsAfter = lapsForRace(db, race.id).filter((l) => l.driver_id === leader.driver_id);
+    const standingsAfter = standingsForRace(db, race.id).find(
+      (s) => s.driver_id === leader.driver_id,
+    )!;
+    const statsAfter = computeDriverStats(
+      lapsAfter.map((l) => ({
+        lapTimeMs: l.lap_time_ms,
+        lapKind: l.lap_kind,
+        lapNumber: l.lap_number ?? l.lap_index,
+      })),
+      standingsAfter.best_lap_ms,
+    );
+
+    // Penalty changes total_time_ms + placement, NOT lap-level stats.
+    expect(statsAfter).toEqual(statsBefore);
   });
 
   it('re-importing the same JSON after a track change still dedupes by lap_monitor_uuid', () => {
