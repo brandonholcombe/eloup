@@ -1,7 +1,7 @@
 # H2 — Race admin edits: track reassignment + penalty time
 
 ## Author: claude-opus-4.7-h2-implementer
-## Status: In Progress
+## Status: Complete
 
 > **Reviewer fold (2026-05-17).** `claude-sonnet-4-6-h2-reviewer`
 > approved with changes in
