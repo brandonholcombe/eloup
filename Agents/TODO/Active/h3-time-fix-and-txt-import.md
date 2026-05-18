@@ -1,7 +1,46 @@
 # H3 — Race time display fix + TXT import support
 
 ## Author: claude-opus-4.7-h3-implementer
-## Status: Not Started
+## Status: In Progress
+
+> **Reviewer findings folded in (2026-05-17).** See
+> `Agents/Review-reports/h3-time-fix-and-txt-import-review.md`
+> (claude-sonnet-4-6-h3-reviewer, APPROVE-WITH-CHANGES). Material
+> deltas baked into the sections below:
+>
+> - **Summary-table skip uses regex** `/\|\s*Laps\s*\|/i` instead of a
+>   literal `| Laps |` string match — the fixture has `| Laps  |`
+>   (two spaces) and a literal match silently fails on every real
+>   export. (MAJOR #6 / #1 in the recommended-follow-ups list.)
+> - **Driver OR-query is deterministic via `ORDER BY CASE`** —
+>   `ORDER BY CASE WHEN lap_monitor_driver_uuid = ? THEN 0 ELSE 1 END
+>   LIMIT 1`, so the UUID match always wins over the name match when
+>   both branches could fire. (MAJOR #1 / #1 in follow-ups.)
+> - **Conditional `upsertDriver` fallback** — confirmed `conditional`
+>   per Q2: case-insensitive `display_name` match only fires when the
+>   existing row's `lap_monitor_driver_uuid` starts with `txt-name:`.
+>   JSON-only flows stay correct; TXT-then-JSON dedups. (Q2 / strengths
+>   in the report.)
+> - **Full month names pinned by test.** A non-May test
+>   (`2026-01-15T08:30:00Z` → `January 15, 2026, 8:30 AM`) locks in the
+>   choice so a future refactor to short names trips the test. (NIT #8
+>   / Q3.)
+> - **`app/racing/upload/page.tsx` copy** added to change-site list —
+>   lines 27 and 47 say "JSON or TXT" after the edit. (MINOR #2.)
+> - **`source_blob = text`** explicitly documented for the TXT path
+>   (mirrors `JSON.stringify(race)` on the JSON side). (MINOR #3.)
+> - **Body schema uses `z.discriminatedUnion` on `format`** —
+>   `format: 'json' | 'txt'` is the explicit discriminant, removing
+>   the `z.union` left-to-right ambiguity. The form sends the matching
+>   literal. (MINOR #4.)
+> - **Hand-offs note** added for the TXT-then-JSON UUID-loss case —
+>   when a TXT-created row dedups against a later JSON, the real
+>   Lap Monitor UUID is NOT backfilled; admin tool needed if the
+>   operator wants to associate the row with the device identity.
+>   (MINOR #5.)
+> - **Scripting-consumer caveat** added — client-side format sniff
+>   means a curl consumer must set `format: 'json' | 'txt'`
+>   explicitly. (Q1.)
 
 > Two related hotfixes to the RC racing surface:
 >
@@ -124,7 +163,8 @@ Under `eloup-web/`:
 | `app/racing/drivers/[driverId]/page.tsx` | edit | Replace local `formatDate` with `formatRecordedDateOnly` (driver profile lists dates without times). |
 | `app/racing/tracks/[slug]/page.tsx` | edit | Replace local `formatDate` with `formatRecordedDateOnly`. |
 | `app/api/racing/import/route.ts` | edit | Read body as text. Sniff: first non-blank char `{` → JSON path (existing zod body shape); else → TXT path (new). Maintain the same auth + 401/403/400 envelope. Both paths must accept `trackId` or `newTrackName`. For TXT, those come as multipart-style form fields? — see Phase C below; we keep the JSON body shape and send the TXT as a string under a `text` field. |
-| `components/RcUploadForm.tsx` | edit | `<input type="file" accept=".json,.txt">`. Label / placeholder copy update. On submit, sniff the user-pasted-or-uploaded text and send either `{json: parsed}` or `{text}` as the POST body. |
+| `components/RcUploadForm.tsx` | edit | `<input type="file" accept=".json,.txt">`. Label / placeholder copy update. On submit, sniff the user-pasted-or-uploaded text and send either `{format: 'json', json: parsed}` or `{format: 'txt', text}` as the POST body. |
+| `app/racing/upload/page.tsx` | edit | Copy: "Sign in to upload Lap Monitor JSON." → "Sign in to upload Lap Monitor JSON or TXT." Line 47 "Paste or upload the Lap Monitor JSON export..." → "...JSON or TXT export...". |
 | `tests/unit/rc-datetime.test.ts` | new | `formatRecordedDate` happy paths (offset, Z, no offset, midnight, noon, 12:00 AM). `formatRecordedDateOnly` happy paths. Invalid input returns input verbatim. |
 | `tests/unit/rc-import-txt.test.ts` | new | TXT parser unit tests: fixture round-trip, malformed lap line rejection, missing driver section rejection, empty file rejection, lap-time parser (`M:SS.HH` → ms), `txt:` UUID stability across whitespace normalization, race-kind dispatch. |
 | `tests/integration/rc-import-txt.test.ts` | new | Full-fixture round-trip via `importLapMonitorTxt`: row counts (1 race, 2 drivers, 42 laps), lap_time_ms magnitudes (Sean lap 1 = 15230 ms, Brandon lap 15 = 28960 ms), re-upload returns duplicate, TXT-then-JSON driver dedup, JSON-then-TXT driver dedup. |
@@ -264,9 +304,11 @@ result.
    `1-11 PM → 13-23`. Reject if format doesn't match.
 3. **Skip the attribution line** containing `lapmonitor.com` (and the
    blank line after).
-4. **Skip the summary table**: the header line containing `| Laps |`,
-   the `===...` separator, and the data rows (one per driver) until
-   we hit a blank line.
+4. **Skip the summary table**: detect the header line by the regex
+   `/\|\s*Laps\s*\|/i` (the fixture's actual header is
+   `| Laps  |` with two spaces — a literal `| Laps |` match silently
+   fails). Then skip the `===...` separator and the data rows (one per
+   driver) until we hit a blank line.
 5. **Per-driver sections**: each begins with `<DriverName>:` on its
    own line. The name is what's before the trailing colon, stripped
    of whitespace. Following lines are lap entries:
@@ -354,16 +396,19 @@ testable.)
 // 4. On miss, insert a new rc_drivers row with the synthetic UUID.
 ```
 
-The SQL:
+The SQL (deterministic — UUID match always wins when both branches
+could fire):
 
 ```sql
 SELECT id FROM rc_drivers
  WHERE lap_monitor_driver_uuid = ?            -- the synthetic txt-name:<lower>
     OR lower(display_name) = lower(?)         -- the raw name
+ ORDER BY CASE WHEN lap_monitor_driver_uuid = ? THEN 0 ELSE 1 END
  LIMIT 1
 ```
 
-When the OR-match wins, the existing driver row's
+The synthetic UUID is bound twice: once for the WHERE, once for the
+ORDER BY. When the OR-match wins, the existing driver row's
 `lap_monitor_driver_uuid` is unchanged (could be a real UUID from a
 JSON import, or another `txt-name:<lower>` from an earlier TXT). The
 contract is: one driver row per case-insensitive name, regardless of
@@ -456,16 +501,21 @@ if (firstNonBlank === '{') {
 ```
 
 **Picked approach**: Both branches go through `application/json`
-content-type with a body shape that explicitly tags the format:
+content-type with a discriminated-union body shape that explicitly
+tags the format. Per MINOR #4: `z.union` is left-to-right and silently
+accepts ambiguous bodies; `z.discriminatedUnion` on an explicit
+`format` literal is unambiguous and self-documenting:
 
 ```ts
-const Body = z.union([
+const Body = z.discriminatedUnion('format', [
   z.object({
+    format: z.literal('json'),
     trackId: z.string().min(1).optional(),
     newTrackName: z.string().min(1).max(120).optional(),
     json: z.unknown(),
   }),
   z.object({
+    format: z.literal('txt'),
     trackId: z.string().min(1).optional(),
     newTrackName: z.string().min(1).max(120).optional(),
     text: z.string().min(1),
@@ -473,10 +523,8 @@ const Body = z.union([
 ]);
 ```
 
-Branch:
-
-- Body has `json` → call `importLapMonitorJson`.
-- Body has `text` → call `importLapMonitorTxt`.
+Branch on `parsed.data.format`. Scripting consumers (curl, etc.)
+MUST set the literal explicitly — there is no server-side sniff.
 
 This makes content sniffing the **client's** job (which already knows
 which format the user picked) and keeps the server-side discrimination
@@ -497,9 +545,10 @@ self-documenting for the scripting use case in R1's Q-R1-4.)
   format (or just keep the JSON-shaped placeholder; the TXT pasted in
   is human-readable enough to recognize without a placeholder hint).
 - On submit, sniff the textarea content's first non-blank char:
-  `{` → POST `{trackId | newTrackName, json: JSON.parse(text)}`; else
-  → POST `{trackId | newTrackName, text}`. The JSON parse stays only
-  on the JSON branch (TXT can't be JSON-parsed and shouldn't be).
+  `{` → POST `{format: 'json', trackId | newTrackName, json: JSON.parse(text)}`;
+  else → POST `{format: 'txt', trackId | newTrackName, text}`. The
+  JSON parse stays only on the JSON branch (TXT can't be JSON-parsed
+  and shouldn't be).
 - 44px tap targets preserved on every interactive control.
 
 ---
@@ -510,9 +559,11 @@ Aim for ~18 new tests. Vitest, same harness as the rest of `tests/`.
 
 ### Unit (`tests/unit/`)
 
-`rc-datetime.test.ts` (new, ~6 tests):
+`rc-datetime.test.ts` (new, ~7 tests):
 - `formatRecordedDate` with offset: `2026-05-03T09:51:32-07:00` → `May 3, 2026, 9:51 AM`.
 - `formatRecordedDate` with Z: `2026-05-03T09:51:32Z` → `May 3, 2026, 9:51 AM`.
+- **Non-May month (pins full-name choice, NIT #8):**
+  `formatRecordedDate('2026-01-15T08:30:00Z')` → `January 15, 2026, 8:30 AM`.
 - `formatRecordedDate` offset-less: `2026-05-03T09:51:32` → `May 3, 2026, 9:51 AM`.
 - `formatRecordedDate` midnight: `2026-05-03T00:00:00Z` → `May 3, 2026, 12:00 AM`.
 - `formatRecordedDate` noon: `2026-05-03T12:00:00Z` → `May 3, 2026, 12:00 PM`.
@@ -661,7 +712,10 @@ match before INSERT to handle the "TXT first" path.
   feature works on any race regardless of import format; no extra
   work needed.
 - Audit log of imports (the `source_blob` column preserves the raw
-  TXT, mirroring the JSON's preservation).
+  TXT, mirroring the JSON's preservation). **Per MINOR #3**:
+  `source_blob = text` (the full raw TXT string verbatim — not a
+  parsed representation) on the TXT path, mirroring
+  `JSON.stringify(race)` on the JSON path.
 
 ---
 
@@ -729,6 +783,20 @@ Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
 
 After H3 ships, the following follow-ups are natural but deferred:
 
+- **TXT-then-JSON: real Lap Monitor UUID is not backfilled.** When a
+  TXT creates a driver row with `lap_monitor_driver_uuid =
+  'txt-name:brandon'` and a subsequent JSON for the same driver runs
+  the conditional fallback, the row is correctly reused but the JSON's
+  real UUID (`F8CFF97C-...`) is NOT written into
+  `rc_drivers.lap_monitor_driver_uuid`. The row retains
+  `txt-name:brandon`. If the operator later wants to associate that
+  row with the real Lap Monitor device identity, a manual admin fix
+  is needed. Captured here per MINOR #5; a follow-up admin tool would
+  resolve.
+- **Scripting consumers.** The format discriminant is client-side —
+  the API requires `format: 'json' | 'txt'` on the body. A curl
+  consumer must set the literal explicitly; no raw-body sniff happens
+  server-side. This is documented per Q1.
 - **Driver-merge admin tool.** TXT imports use case-insensitive name
   matching, which collapses "Brandon Smith" and "Brandon Jones" — a
   real risk at parties with multiple Brandons. A small
