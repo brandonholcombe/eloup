@@ -3,19 +3,24 @@ import { formatLapMs } from '@/lib/rc/format';
 import { driverColor } from '@/lib/rc/colors';
 
 describe('formatLapMs', () => {
-  it('formats sub-second values', () => {
-    expect(formatLapMs(2171)).toBe('00:02.171');
+  it('formats sub-second values at centisecond precision', () => {
+    expect(formatLapMs(2171)).toBe('00:02.17');
   });
   it('formats round seconds', () => {
-    expect(formatLapMs(60_000)).toBe('01:00.000');
+    expect(formatLapMs(60_000)).toBe('01:00.00');
   });
   it('formats large minute values', () => {
-    expect(formatLapMs(125_678)).toBe('02:05.678');
+    expect(formatLapMs(125_678)).toBe('02:05.67');
   });
-  it('treats 0 and negatives as 00:00.000', () => {
-    expect(formatLapMs(0)).toBe('00:00.000');
-    expect(formatLapMs(-500)).toBe('00:00.000');
-    expect(formatLapMs(Number.NaN)).toBe('00:00.000');
+  it('treats 0 and negatives as 00:00.00', () => {
+    expect(formatLapMs(0)).toBe('00:00.00');
+    expect(formatLapMs(-500)).toBe('00:00.00');
+    expect(formatLapMs(Number.NaN)).toBe('00:00.00');
+  });
+  it('Lap Monitor magnitudes — Sean lap 1 = 15230ms → 00:15.23', () => {
+    // Pin the case the prior centisecond-vs-millisecond fix surfaced.
+    expect(formatLapMs(15_230)).toBe('00:15.23');
+    expect(formatLapMs(310_700)).toBe('05:10.70');
   });
 });
 
