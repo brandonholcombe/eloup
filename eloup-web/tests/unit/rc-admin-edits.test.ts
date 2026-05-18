@@ -6,8 +6,10 @@ import { join } from 'node:path';
 import { applyMigrations } from '@/lib/db/migrate';
 import {
   deleteRace,
+  getDriverWithLinkedPlayer,
   getRace,
   setDriverPenalty,
+  setDriverPlayer,
   setRaceTrack,
   standingsForRace,
 } from '@/lib/db/rc';
@@ -195,6 +197,84 @@ describe('setDriverPenalty', () => {
     // Brandon's transponder (10) < Willy's (20), so Brandon stays 1st.
     expect(standings.find((s) => s.driver_id === brandonId)!.placement).toBe(1);
     expect(standings.find((s) => s.driver_id === willyId)!.placement).toBe(2);
+  });
+});
+
+describe('setDriverPlayer', () => {
+  function seedPlayer(db: Database.Database, id: string, handle: string) {
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, role)
+       VALUES (?, ?, ?, ?, 'user')`,
+    ).run(id, `discord-${id}`, handle, `Player ${id}`);
+  }
+
+  it('links a driver to a player and ok-statuses', () => {
+    const db = freshDb();
+    const { brandonId } = seedTwoDriverRace(db);
+    seedPlayer(db, 'p1', 'p1handle');
+
+    expect(setDriverPlayer(db, brandonId, 'p1')).toEqual({ status: 'ok' });
+    const row = db
+      .prepare(`SELECT player_id FROM rc_drivers WHERE id = ?`)
+      .get(brandonId) as { player_id: string | null };
+    expect(row.player_id).toBe('p1');
+  });
+
+  it('returns no_driver for an unknown driverId and does not mutate', () => {
+    const db = freshDb();
+    seedTwoDriverRace(db);
+    seedPlayer(db, 'p1', 'p1handle');
+
+    expect(setDriverPlayer(db, 'missing', 'p1')).toEqual({ status: 'no_driver' });
+  });
+
+  it('returns no_player for a real driver + bogus playerId, leaves player_id unchanged', () => {
+    const db = freshDb();
+    const { brandonId } = seedTwoDriverRace(db);
+
+    expect(setDriverPlayer(db, brandonId, 'nope')).toEqual({ status: 'no_player' });
+    const row = db
+      .prepare(`SELECT player_id FROM rc_drivers WHERE id = ?`)
+      .get(brandonId) as { player_id: string | null };
+    expect(row.player_id).toBeNull();
+  });
+
+  it('null-clears an existing link', () => {
+    const db = freshDb();
+    const { brandonId } = seedTwoDriverRace(db);
+    seedPlayer(db, 'p1', 'p1handle');
+    setDriverPlayer(db, brandonId, 'p1');
+
+    expect(setDriverPlayer(db, brandonId, null)).toEqual({ status: 'ok' });
+    const row = db
+      .prepare(`SELECT player_id FROM rc_drivers WHERE id = ?`)
+      .get(brandonId) as { player_id: string | null };
+    expect(row.player_id).toBeNull();
+  });
+
+  it('getDriverWithLinkedPlayer surfaces linked names via LEFT JOIN', () => {
+    const db = freshDb();
+    const { brandonId, willyId } = seedTwoDriverRace(db);
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, role, avatar_url)
+       VALUES ('p1', 'd1', 'brandonw', 'Brandon W', 'user', 'http://avatar/1.png')`,
+    ).run();
+    setDriverPlayer(db, brandonId, 'p1');
+
+    const linked = getDriverWithLinkedPlayer(db, brandonId);
+    expect(linked).not.toBeNull();
+    expect(linked!.player_id).toBe('p1');
+    expect(linked!.linked_display_name).toBe('Brandon W');
+    expect(linked!.linked_discord_handle).toBe('brandonw');
+    expect(linked!.linked_avatar_url).toBe('http://avatar/1.png');
+
+    // Willy is not linked — both linked_* fields stay null.
+    const unlinked = getDriverWithLinkedPlayer(db, willyId);
+    expect(unlinked).not.toBeNull();
+    expect(unlinked!.player_id).toBeNull();
+    expect(unlinked!.linked_display_name).toBeNull();
+    expect(unlinked!.linked_discord_handle).toBeNull();
+    expect(unlinked!.linked_avatar_url).toBeNull();
   });
 });
 

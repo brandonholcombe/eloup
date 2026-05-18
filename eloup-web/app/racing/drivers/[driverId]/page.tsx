@@ -1,11 +1,13 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import {
-  getDriver,
+  getDriverWithLinkedPlayer,
   perTrackBestsForDriver,
   recentRacesForDriver,
 } from '@/lib/db/rc';
+import { DriverPlayerLink } from '@/components/DriverPlayerLink';
 import { driverColor } from '@/lib/rc/colors';
 import { formatRecordedDateOnly } from '@/lib/rc/datetime';
 import { formatLapMs } from '@/lib/rc/format';
@@ -19,20 +21,17 @@ export default async function DriverProfilePage({
 }) {
   const { driverId } = await params;
   const handle = db();
-  const driver = getDriver(handle, driverId);
+  const driver = getDriverWithLinkedPlayer(handle, driverId);
   if (!driver) notFound();
-  const linkedPlayer = driver.player_id
-    ? (handle
-        .prepare(`SELECT id, display_name, discord_handle FROM players WHERE id = ?`)
-        .get(driver.player_id) as
-        | { id: string; display_name: string; discord_handle: string }
-        | undefined)
-    : undefined;
+  const session = await auth();
+  const isAdmin = session?.user?.role === 'global_admin';
   const recent = recentRacesForDriver(handle, driver.id);
   const bestsPerTrack = perTrackBestsForDriver(handle, driver.id);
 
+  const isLinked = driver.player_id != null && driver.linked_discord_handle != null;
+
   return (
-    <main className="p-4">
+    <main className="mx-auto max-w-4xl p-4">
       <Link href="/racing" className="text-sm text-slate-400 hover:text-slate-200">
         ← All races
       </Link>
@@ -44,12 +43,31 @@ export default async function DriverProfilePage({
         />
         <h1 className="text-2xl font-semibold">{driver.display_name}</h1>
       </div>
-      {linkedPlayer ? (
+      {isLinked ? (
         <p className="mt-1 text-sm text-slate-400">
-          Linked to <Link href="/profile" className="text-blue-400 hover:text-blue-300">@{linkedPlayer.discord_handle}</Link>
+          Linked to{' '}
+          <Link href="/profile" className="text-blue-400 hover:text-blue-300">
+            @{driver.linked_discord_handle}
+          </Link>{' '}
+          <span className="text-slate-500">({driver.linked_display_name})</span>
         </p>
       ) : (
         <p className="mt-1 text-xs text-slate-500">No Discord linkage — RC-local profile.</p>
+      )}
+
+      {isAdmin && (
+        <DriverPlayerLink
+          driverId={driver.id}
+          currentLink={
+            isLinked
+              ? {
+                  id: driver.player_id!,
+                  display_name: driver.linked_display_name!,
+                  discord_handle: driver.linked_discord_handle!,
+                }
+              : null
+          }
+        />
       )}
 
       <section className="mt-6">

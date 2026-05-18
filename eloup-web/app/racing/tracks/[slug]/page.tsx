@@ -20,7 +20,7 @@ export default async function TrackLeaderboardPage({
   const bests = bestLapsForTrack(handle, track.id);
 
   return (
-    <main className="p-4">
+    <main className="mx-auto max-w-4xl p-4">
       <Link href="/racing" className="text-sm text-slate-400 hover:text-slate-200">
         ← All races
       </Link>

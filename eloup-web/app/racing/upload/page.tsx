@@ -12,7 +12,7 @@ export default async function RacingUploadPage() {
   const session = await auth();
   if (!session?.user) {
     return (
-      <main className="p-4">
+      <main className="mx-auto max-w-4xl p-4">
         <h1 className="text-2xl font-semibold">Upload race</h1>
         <p className="mt-4 text-sm text-slate-300">Sign in to upload Lap Monitor JSON or TXT.</p>
         <form
@@ -37,7 +37,7 @@ export default async function RacingUploadPage() {
   }
   const tracks = listTracks(db());
   return (
-    <main className="p-4">
+    <main className="mx-auto max-w-4xl p-4">
       <Link href="/racing" className="text-sm text-slate-400 hover:text-slate-200">
         ← All races
       </Link>

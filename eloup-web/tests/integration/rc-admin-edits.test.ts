@@ -8,13 +8,17 @@ import { importLapMonitorJson } from '@/lib/rc/import';
 import {
   bestLapsForTrack,
   deleteRace,
+  getDriverWithLinkedPlayer,
   getRace,
   lapsForRace,
+  listDrivers,
   listRaces,
   setDriverPenalty,
+  setDriverPlayer,
   setRaceTrack,
   standingsForRace,
 } from '@/lib/db/rc';
+import { searchPlayers } from '@/lib/db/queries';
 import { computeDriverStats } from '@/lib/rc/stats';
 
 const FIXTURE_PATH = join(
@@ -250,6 +254,72 @@ describe('rc admin edits — end-to-end', () => {
     // The hint condition: same placement AND non-zero penalty.
     const penalty_ms = 5000;
     expect(placement_before === placement_after && penalty_ms > 0).toBe(true);
+  });
+
+  it('PATCH driver player_id bracket — link then unlink round-trips through getDriverWithLinkedPlayer', () => {
+    // The route's surface is: setDriverPlayer then getDriverWithLinkedPlayer.
+    // Mirror the round-trip at the lib level — the routes themselves are
+    // thin glue over these two helpers.
+    const { db } = setup();
+    const drivers = listDrivers(db);
+    expect(drivers.length).toBeGreaterThan(0);
+    const driverId = drivers[0]!.id;
+
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, role, avatar_url)
+       VALUES ('plink', 'dlink', 'linker', 'Linker P', 'user', 'http://av/p.png')`,
+    ).run();
+
+    // Initially not linked.
+    let row = getDriverWithLinkedPlayer(db, driverId);
+    expect(row!.player_id).toBeNull();
+    expect(row!.linked_discord_handle).toBeNull();
+
+    // Link.
+    expect(setDriverPlayer(db, driverId, 'plink')).toEqual({ status: 'ok' });
+    row = getDriverWithLinkedPlayer(db, driverId);
+    expect(row!.player_id).toBe('plink');
+    expect(row!.linked_display_name).toBe('Linker P');
+    expect(row!.linked_discord_handle).toBe('linker');
+
+    // Null-clear.
+    expect(setDriverPlayer(db, driverId, null)).toEqual({ status: 'ok' });
+    row = getDriverWithLinkedPlayer(db, driverId);
+    expect(row!.player_id).toBeNull();
+    expect(row!.linked_display_name).toBeNull();
+  });
+
+  it('PATCH driver player_id — bogus playerId returns no_player, leaves link untouched', () => {
+    const { db } = setup();
+    const driverId = listDrivers(db)[0]!.id;
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, role)
+       VALUES ('real', 'dr', 'real', 'Real', 'user')`,
+    ).run();
+    setDriverPlayer(db, driverId, 'real');
+
+    expect(setDriverPlayer(db, driverId, 'ghost')).toEqual({ status: 'no_player' });
+    const row = getDriverWithLinkedPlayer(db, driverId);
+    expect(row!.player_id).toBe('real');
+  });
+
+  it('GET /api/players/search — searchPlayers surfaces fixture-relevant players by handle and display_name', () => {
+    const { db } = setup();
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, role)
+       VALUES ('p1', 'd1', 'brandonw', 'Brandon W', 'user')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, role)
+       VALUES ('p2', 'd2', 'willybilly', 'Willy', 'user')`,
+    ).run();
+
+    // by handle prefix
+    expect(searchPlayers(db, 'brandon').map((h) => h.id)).toEqual(['p1']);
+    // by display_name
+    expect(searchPlayers(db, 'Willy').map((h) => h.id)).toEqual(['p2']);
+    // empty query still returns [] even when fixture has players.
+    expect(searchPlayers(db, '')).toEqual([]);
   });
 
   it('PATCH penalty placement bracket — tiebreak race flips placement, hint condition does not hold', () => {

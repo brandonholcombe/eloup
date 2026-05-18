@@ -27,7 +27,7 @@ export default async function RacingIndexPage({
   const races = listRaces(handle, activeTrack ? { trackId: activeTrack.id } : {});
 
   return (
-    <main className="p-4">
+    <main className="mx-auto max-w-4xl p-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold">Racing</h1>

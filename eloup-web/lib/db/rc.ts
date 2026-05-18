@@ -87,6 +87,12 @@ export type RcDriverPerTrackBestRow = {
   best_lap_ms: number;
 };
 
+export type RcDriverWithPlayerRow = RcDriverRow & {
+  linked_display_name: string | null;
+  linked_discord_handle: string | null;
+  linked_avatar_url: string | null;
+};
+
 export function listTracks(db: Database.Database): RcTrackRow[] {
   return db.prepare(`SELECT * FROM rc_tracks ORDER BY name`).all() as RcTrackRow[];
 }
@@ -278,6 +284,52 @@ export function getDriver(db: Database.Database, id: string): RcDriverRow | null
     (db.prepare(`SELECT * FROM rc_drivers WHERE id = ?`).get(id) as RcDriverRow | undefined) ??
     null
   );
+}
+
+export function getDriverWithLinkedPlayer(
+  db: Database.Database,
+  driverId: string,
+): RcDriverWithPlayerRow | null {
+  return (
+    (db
+      .prepare(
+        `SELECT d.id, d.lap_monitor_driver_uuid, d.display_name, d.player_id, d.created_at,
+                p.display_name   AS linked_display_name,
+                p.discord_handle AS linked_discord_handle,
+                p.avatar_url     AS linked_avatar_url
+           FROM rc_drivers d
+           LEFT JOIN players p ON p.id = d.player_id
+          WHERE d.id = ?`,
+      )
+      .get(driverId) as RcDriverWithPlayerRow | undefined) ?? null
+  );
+}
+
+// Validate the FK in app code so the API surface returns a typed status
+// instead of leaking SQLite's FOREIGN KEY error. Same .immediate() tx
+// shape as setRaceTrack / setDriverPenalty / deleteRace.
+export function setDriverPlayer(
+  db: Database.Database,
+  driverId: string,
+  playerId: string | null,
+): { status: 'ok' } | { status: 'no_driver' } | { status: 'no_player' } {
+  const tx = db.transaction(() => {
+    const driver = db.prepare(`SELECT id FROM rc_drivers WHERE id = ?`).get(driverId) as
+      | { id: string }
+      | undefined;
+    if (!driver) return { status: 'no_driver' as const };
+
+    if (playerId !== null) {
+      const player = db.prepare(`SELECT id FROM players WHERE id = ?`).get(playerId) as
+        | { id: string }
+        | undefined;
+      if (!player) return { status: 'no_player' as const };
+    }
+
+    db.prepare(`UPDATE rc_drivers SET player_id = ? WHERE id = ?`).run(playerId, driverId);
+    return { status: 'ok' as const };
+  });
+  return tx.immediate();
 }
 
 export function listDrivers(db: Database.Database): RcDriverRow[] {

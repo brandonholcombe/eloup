@@ -75,3 +75,38 @@ export function overallLeaderboard(db: Database.Database, limit = 50): LeaderRow
     )
     .all(limit) as LeaderRow[];
 }
+
+export type PlayerSearchHit = {
+  id: string;
+  display_name: string;
+  discord_handle: string;
+  avatar_url: string | null;
+};
+
+// Case-insensitive substring search on display_name OR discord_handle.
+// Empty / whitespace-only query short-circuits to [] so the result list
+// never accidentally enumerates the player table on first keystroke.
+// `%` and `_` in the query are escaped so a literal underscore in a
+// Discord handle (e.g. `user_name`) matches the same handle, not any
+// handle with *something* in that position. ESCAPE '\' on the SQL side
+// tells SQLite the backslash is the escape character.
+export function searchPlayers(
+  db: Database.Database,
+  query: string,
+  limit = 5,
+): PlayerSearchHit[] {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) return [];
+  const escaped = trimmed.toLowerCase().replace(/[\\%_]/g, '\\$&');
+  const like = `%${escaped}%`;
+  return db
+    .prepare(
+      `SELECT id, display_name, discord_handle, avatar_url
+         FROM players
+        WHERE LOWER(display_name)   LIKE ? ESCAPE '\\'
+           OR LOWER(discord_handle) LIKE ? ESCAPE '\\'
+        ORDER BY display_name
+        LIMIT ?`,
+    )
+    .all(like, like, limit) as PlayerSearchHit[];
+}

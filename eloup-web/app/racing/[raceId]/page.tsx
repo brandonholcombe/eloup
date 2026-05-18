@@ -3,8 +3,13 @@ import { notFound } from 'next/navigation';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { getRace, lapsForRace, listTracks, standingsForRace } from '@/lib/db/rc';
-import { LapChart, type LapChartDriver } from '@/components/LapChart';
+import { type LapChartDriver } from '@/components/LapChart';
+import { RaceChartSection } from '@/components/RaceChartSection';
 import { RaceAdminPanel } from '@/components/RaceAdminPanel';
+import {
+  CompareDriversSection,
+  type CompareDriver,
+} from '@/components/CompareDriversSection';
 import { driverColor } from '@/lib/rc/colors';
 import { formatRecordedDate } from '@/lib/rc/datetime';
 import { formatLapMs } from '@/lib/rc/format';
@@ -51,8 +56,102 @@ export default async function RaceDetailPage({
     };
   });
 
+  // Compute per-driver stats ONCE and reuse for both the lap-by-lap
+  // details and the compare section. Avoids double-computing the same
+  // stats per driver and keeps the data shape explicit.
+  const statsByDriver = new Map<string, DriverStats>();
+  for (const s of standings) {
+    const driverLaps = laps.filter((l) => l.driver_id === s.driver_id);
+    statsByDriver.set(
+      s.driver_id,
+      computeDriverStats(
+        driverLaps.map((l) => ({
+          lapTimeMs: l.lap_time_ms,
+          lapKind: l.lap_kind,
+          lapNumber: l.lap_number ?? l.lap_index,
+        })),
+        s.best_lap_ms,
+      ),
+    );
+  }
+
+  const compareDrivers: CompareDriver[] = standings.map((s) => ({
+    driverId: s.driver_id,
+    displayName: s.display_name,
+    stats: statsByDriver.get(s.driver_id)!,
+  }));
+
+  const chartSection = (
+    <section>
+      <RaceChartSection drivers={chartData} />
+      <p className="mt-1 text-[11px] text-slate-500">
+        Laps over {DEFAULT_OUTLIER_MULTIPLIER}× a driver&apos;s fastest are hidden from the chart
+        as crashes / resets
+        {outlierCount > 0 ? ` (${outlierCount} hidden)` : ''}. Tap a chip to toggle, long-press
+        to isolate. Full lap-by-lap table is below.
+      </p>
+    </section>
+  );
+
+  const standingsSection = (
+    <section>
+      <h2 className="text-lg font-medium">Final standings</h2>
+      <table className="mt-2 w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
+            <th className="py-2 pr-2">#</th>
+            <th className="py-2 pr-2">Driver</th>
+            <th className="py-2 pr-2 text-right">Laps</th>
+            <th className="py-2 pr-2 text-right">Best</th>
+            <th className="py-2 pr-2 text-right">Penalty</th>
+            <th className="py-2 pr-0 text-right">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {standings.map((s) => (
+            <tr key={s.driver_id} className="border-t border-slate-800">
+              <td className="py-2 pr-2 font-mono">{s.placement}</td>
+              <td className="py-2 pr-2">
+                <Link
+                  href={`/racing/drivers/${s.driver_id}`}
+                  className="flex items-center gap-2 hover:text-slate-100"
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-2 w-2 rounded-full"
+                    style={{ background: driverColor(s.driver_id) }}
+                  />
+                  {s.display_name}
+                </Link>
+              </td>
+              <td className="py-2 pr-2 text-right font-mono tabular-nums">
+                {s.laps_completed}
+              </td>
+              <td className="py-2 pr-2 text-right font-mono tabular-nums">
+                {s.best_lap_ms != null ? formatLapMs(s.best_lap_ms) : '—'}
+              </td>
+              <td className="py-2 pr-2 text-right font-mono tabular-nums">
+                {s.penalty_ms > 0 ? (
+                  <span className="text-amber-400">+{(s.penalty_ms / 1000).toFixed(1)}s</span>
+                ) : (
+                  '—'
+                )}
+              </td>
+              <td className="py-2 pr-0 text-right font-mono tabular-nums">
+                {formatLapMs(s.adjusted_total_time_ms)}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      {hasPenalty && (
+        <p className="mt-1 text-[11px] text-slate-500">Total includes penalty.</p>
+      )}
+    </section>
+  );
+
   return (
-    <main className="p-4">
+    <main className="mx-auto max-w-4xl p-4">
       <Link href="/racing" className="text-sm text-slate-400 hover:text-slate-200">
         ← All races
       </Link>
@@ -70,69 +169,14 @@ export default async function RaceDetailPage({
         <time className="font-mono">{formatRecordedDate(race.race_started_at)}</time>
       </div>
 
-      <section className="mt-4">
-        <LapChart drivers={chartData} />
-        <p className="mt-1 text-[11px] text-slate-500">
-          Laps over {DEFAULT_OUTLIER_MULTIPLIER}× a driver&apos;s fastest are hidden from the chart
-          as crashes / resets
-          {outlierCount > 0 ? ` (${outlierCount} hidden)` : ''}. Full lap-by-lap table is below.
-        </p>
-      </section>
-
-      <section className="mt-6">
-        <h2 className="text-lg font-medium">Final standings</h2>
-        <table className="mt-2 w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
-              <th className="py-2 pr-2">#</th>
-              <th className="py-2 pr-2">Driver</th>
-              <th className="py-2 pr-2 text-right">Laps</th>
-              <th className="py-2 pr-2 text-right">Best</th>
-              <th className="py-2 pr-2 text-right">Penalty</th>
-              <th className="py-2 pr-0 text-right">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {standings.map((s) => (
-              <tr key={s.driver_id} className="border-t border-slate-800">
-                <td className="py-2 pr-2 font-mono">{s.placement}</td>
-                <td className="py-2 pr-2">
-                  <Link
-                    href={`/racing/drivers/${s.driver_id}`}
-                    className="flex items-center gap-2 hover:text-slate-100"
-                  >
-                    <span
-                      aria-hidden
-                      className="inline-block h-2 w-2 rounded-full"
-                      style={{ background: driverColor(s.driver_id) }}
-                    />
-                    {s.display_name}
-                  </Link>
-                </td>
-                <td className="py-2 pr-2 text-right font-mono tabular-nums">
-                  {s.laps_completed}
-                </td>
-                <td className="py-2 pr-2 text-right font-mono tabular-nums">
-                  {s.best_lap_ms != null ? formatLapMs(s.best_lap_ms) : '—'}
-                </td>
-                <td className="py-2 pr-2 text-right font-mono tabular-nums">
-                  {s.penalty_ms > 0 ? (
-                    <span className="text-amber-400">+{(s.penalty_ms / 1000).toFixed(1)}s</span>
-                  ) : (
-                    '—'
-                  )}
-                </td>
-                <td className="py-2 pr-0 text-right font-mono tabular-nums">
-                  {formatLapMs(s.adjusted_total_time_ms)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {hasPenalty && (
-          <p className="mt-1 text-[11px] text-slate-500">Total includes penalty.</p>
-        )}
-      </section>
+      {/* lg: places chart 2/3 + standings 1/3 side-by-side. Below 1024px
+          the grid collapses to a stack (mobile-first). The chart's SVG
+          uses viewBox-based scaling so it renders cleanly at the
+          narrower column width. */}
+      <div className="mt-4 lg:grid lg:grid-cols-3 lg:gap-6">
+        <div className="lg:col-span-2">{chartSection}</div>
+        <div className="mt-6 lg:col-span-1 lg:mt-0">{standingsSection}</div>
+      </div>
 
       {isAdmin && (
         <RaceAdminPanel
@@ -149,18 +193,13 @@ export default async function RaceDetailPage({
         />
       )}
 
+      <CompareDriversSection drivers={compareDrivers} />
+
       <section className="mt-6 space-y-4">
         <h2 className="text-lg font-medium">Lap-by-lap</h2>
         {standings.map((s) => {
           const driverLaps = laps.filter((l) => l.driver_id === s.driver_id);
-          const stats = computeDriverStats(
-            driverLaps.map((l) => ({
-              lapTimeMs: l.lap_time_ms,
-              lapKind: l.lap_kind,
-              lapNumber: l.lap_number ?? l.lap_index,
-            })),
-            s.best_lap_ms,
-          );
+          const stats = statsByDriver.get(s.driver_id)!;
           return (
             <details key={s.driver_id} className="rounded-md border border-slate-800 bg-slate-900">
               <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm">
