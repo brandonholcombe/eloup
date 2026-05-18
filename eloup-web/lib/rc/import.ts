@@ -90,6 +90,18 @@ export function importLapMonitorJson(
   const findDriver = db.prepare(
     `SELECT id FROM rc_drivers WHERE lap_monitor_driver_uuid = ?`,
   );
+  // Conditional fallback: only used when the UUID lookup misses. Matches
+  // by case-insensitive display_name BUT ONLY when the existing row's
+  // lap_monitor_driver_uuid starts with `txt-name:` (i.e. the row was
+  // created by a TXT import and has no real Lap Monitor UUID yet). This
+  // preserves the JSON-only invariant that two distinct JSON drivers
+  // with the same first name stay distinct.
+  const findDriverByTxtName = db.prepare(
+    `SELECT id FROM rc_drivers
+      WHERE lower(display_name) = lower(?)
+        AND lap_monitor_driver_uuid LIKE 'txt-name:%'
+      LIMIT 1`,
+  );
   const insertDriver = db.prepare(
     `INSERT INTO rc_drivers(id, lap_monitor_driver_uuid, display_name) VALUES (?, ?, ?)`,
   );
@@ -139,6 +151,7 @@ export function importLapMonitorJson(
           driver,
           driverIdByUuid,
           findDriver,
+          findDriverByTxtName,
           insertDriver,
           updateDriverName,
           summary,
@@ -204,6 +217,7 @@ function upsertDriver(
   driver: DriverRow,
   cache: Map<string, string>,
   findStmt: Database.Statement,
+  findByTxtNameStmt: Database.Statement,
   insertStmt: Database.Statement,
   updateNameStmt: Database.Statement,
   summary: ImportSummary,
@@ -219,6 +233,17 @@ function upsertDriver(
     cache.set(driver.driverUuid, existing.id);
     summary.driversReused++;
     return existing.id;
+  }
+  // Conditional fallback: a row exists for this driver name that was
+  // created by a TXT import (lap_monitor_driver_uuid LIKE 'txt-name:%').
+  // Reuse it. The real Lap Monitor UUID is NOT backfilled — see
+  // Hand-offs in h3-time-fix-and-txt-import.md.
+  const txtNamed = findByTxtNameStmt.get(driver.name) as { id: string } | undefined;
+  if (txtNamed) {
+    updateNameStmt.run(driver.name, txtNamed.id, driver.name);
+    cache.set(driver.driverUuid, txtNamed.id);
+    summary.driversReused++;
+    return txtNamed.id;
   }
   const id = randomUUID();
   insertStmt.run(id, driver.driverUuid, driver.name);

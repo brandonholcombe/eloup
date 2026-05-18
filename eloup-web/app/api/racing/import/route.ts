@@ -4,16 +4,28 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { canUploadRaceResults, type SessionPlayer } from '@/lib/permissions';
 import { importLapMonitorJson } from '@/lib/rc/import';
+import { importLapMonitorTxt } from '@/lib/rc/import-txt';
 import { createTrack } from '@/lib/rc/tracks';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-const Body = z.object({
-  trackId: z.string().min(1).optional(),
-  newTrackName: z.string().min(1).max(120).optional(),
-  json: z.unknown(),
-});
+// Discriminated body — explicit `format` literal removes the z.union
+// left-to-right ambiguity. Scripting consumers MUST set the literal.
+const Body = z.discriminatedUnion('format', [
+  z.object({
+    format: z.literal('json'),
+    trackId: z.string().min(1).optional(),
+    newTrackName: z.string().min(1).max(120).optional(),
+    json: z.unknown(),
+  }),
+  z.object({
+    format: z.literal('txt'),
+    trackId: z.string().min(1).optional(),
+    newTrackName: z.string().min(1).max(120).optional(),
+    text: z.string().min(1),
+  }),
+]);
 
 export async function POST(req: Request) {
   const session = await auth();
@@ -28,7 +40,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: 'invalid body' }, { status: 400 });
   }
-  const { trackId, newTrackName, json } = parsed.data;
+  const { trackId, newTrackName } = parsed.data;
   if (!trackId && !newTrackName) {
     return NextResponse.json(
       { error: 'one of trackId or newTrackName is required' },
@@ -38,10 +50,15 @@ export async function POST(req: Request) {
 
   const handle = db();
   const resolvedTrackId = trackId ?? createTrack(handle, newTrackName!).trackId;
-  const result = importLapMonitorJson(handle, json, resolvedTrackId, sp.id);
+
+  const result =
+    parsed.data.format === 'json'
+      ? importLapMonitorJson(handle, parsed.data.json, resolvedTrackId, sp.id)
+      : importLapMonitorTxt(handle, parsed.data.text, resolvedTrackId, sp.id);
 
   if (result.status === 'invalid') {
-    return NextResponse.json({ error: 'invalid json', reason: result.reason }, { status: 400 });
+    const errKey = parsed.data.format === 'json' ? 'invalid json' : 'invalid txt';
+    return NextResponse.json({ error: errKey, reason: result.reason }, { status: 400 });
   }
   return NextResponse.json({
     status: 'ok',

@@ -23,18 +23,28 @@ export function RcUploadForm({ tracks }: { tracks: RcTrackRow[] }) {
         e.preventDefault();
         setErr(null);
         setOk(null);
-        let parsed: unknown;
-        try {
-          parsed = JSON.parse(text);
-        } catch (parseErr) {
-          setErr(`JSON parse error: ${(parseErr as Error).message}`);
-          return;
+        // Client-side format sniff: first non-blank char `{` → JSON,
+        // anything else → TXT. The server requires an explicit `format`
+        // literal — no server-side sniffing.
+        const firstNonBlank = text.replace(/^\s+/, '').charAt(0);
+        const isJson = firstNonBlank === '{';
+        let jsonParsed: unknown;
+        if (isJson) {
+          try {
+            jsonParsed = JSON.parse(text);
+          } catch (parseErr) {
+            setErr(`JSON parse error: ${(parseErr as Error).message}`);
+            return;
+          }
         }
         start(async () => {
-          const body =
+          const trackPart =
             mode === 'existing'
-              ? { trackId, json: parsed }
-              : { newTrackName: newTrackName.trim(), json: parsed };
+              ? { trackId }
+              : { newTrackName: newTrackName.trim() };
+          const body = isJson
+            ? { format: 'json' as const, ...trackPart, json: jsonParsed }
+            : { format: 'txt' as const, ...trackPart, text };
           const resp = await fetch('/api/racing/import', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
@@ -113,10 +123,12 @@ export function RcUploadForm({ tracks }: { tracks: RcTrackRow[] }) {
       </fieldset>
 
       <fieldset className="space-y-2">
-        <legend className="text-xs uppercase tracking-wide text-slate-400">Lap Monitor JSON</legend>
+        <legend className="text-xs uppercase tracking-wide text-slate-400">
+          Lap Monitor JSON or TXT
+        </legend>
         <input
           type="file"
-          accept="application/json,.json"
+          accept=".json,.txt,application/json,text/plain"
           onChange={async (e) => {
             const file = e.target.files?.[0];
             if (!file) return;
@@ -127,7 +139,7 @@ export function RcUploadForm({ tracks }: { tracks: RcTrackRow[] }) {
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder='{ "races": [...] }'
+          placeholder='{ "races": [...] }  or  Race    May 17, 2026 at ...'
           rows={6}
           className="block w-full rounded-md border border-slate-700 bg-slate-900 p-2 font-mono text-xs"
         />

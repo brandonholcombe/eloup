@@ -14,7 +14,7 @@ export default async function RacingUploadPage() {
     return (
       <main className="p-4">
         <h1 className="text-2xl font-semibold">Upload race</h1>
-        <p className="mt-4 text-sm text-slate-300">Sign in to upload Lap Monitor JSON.</p>
+        <p className="mt-4 text-sm text-slate-300">Sign in to upload Lap Monitor JSON or TXT.</p>
         <form
           className="mt-4"
           action={async () => {
@@ -43,9 +43,9 @@ export default async function RacingUploadPage() {
       </Link>
       <h1 className="mt-2 text-2xl font-semibold">Upload race</h1>
       <p className="mt-1 text-sm text-slate-400">
-        Paste or upload the Lap Monitor JSON export. Pick an existing track or create a new one.
-        Re-uploading a file that has already been imported is safe — the race UUID is the
-        idempotency anchor.
+        Paste or upload the Lap Monitor JSON or TXT export. Pick an existing track or create a new
+        one. Re-uploading a file that has already been imported is safe — JSON dedupes on the
+        race UUID, TXT on a content-hash of the file.
       </p>
       <RcUploadForm tracks={tracks} />
     </main>

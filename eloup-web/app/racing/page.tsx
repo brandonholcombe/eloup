@@ -53,7 +53,7 @@ export default async function RacingIndexPage({
         <div className="mt-6 space-y-3">
           <p className="text-slate-400">
             {tracks.length === 0
-              ? 'No races yet. An admin can upload a Lap Monitor JSON export to get started.'
+              ? 'No races yet. An admin can upload a Lap Monitor JSON or TXT export to get started.'
               : 'No races for this track.'}
           </p>
           {canUpload && (
@@ -61,7 +61,7 @@ export default async function RacingIndexPage({
               href="/racing/upload"
               className="inline-block h-tap min-w-tap rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-400"
             >
-              Upload Lap Monitor JSON
+              Upload Lap Monitor JSON or TXT
             </Link>
           )}
         </div>
