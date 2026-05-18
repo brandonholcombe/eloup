@@ -144,6 +144,8 @@ export default async function RaceDetailPage({
             displayName: s.display_name,
             penaltyMs: s.penalty_ms,
           }))}
+          raceName={race.race_name}
+          raceKind={race.race_kind}
         />
       )}
 

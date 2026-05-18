@@ -34,6 +34,13 @@ export async function PATCH(
   }
 
   const handle = db();
+  // Bracket the mutation: read placement BEFORE setDriverPenalty (which
+  // recomputes placements internally), then again after. The UI uses the
+  // pair to detect a no-op-on-placement save (penalty applied but
+  // laps_completed kept the driver in the same row) and surface a hint.
+  const beforeRow = standingsForRace(handle, raceId).find((s) => s.driver_id === driverId);
+  const placement_before = beforeRow?.placement ?? null;
+
   const result = setDriverPenalty(handle, raceId, driverId, parsed.data.penalty_ms);
   switch (result.status) {
     case 'invalid':
@@ -41,12 +48,13 @@ export async function PATCH(
     case 'no_row':
       return NextResponse.json({ error: 'race driver not found' }, { status: 404 });
     case 'ok': {
-      const standings = standingsForRace(handle, raceId);
-      const row = standings.find((s) => s.driver_id === driverId);
+      const afterRow = standingsForRace(handle, raceId).find((s) => s.driver_id === driverId);
       return NextResponse.json({
         status: 'ok',
-        placement: row?.placement ?? null,
-        adjusted_total_time_ms: row?.adjusted_total_time_ms ?? null,
+        placement_before,
+        placement_after: afterRow?.placement ?? null,
+        adjusted_total_time_ms: afterRow?.adjusted_total_time_ms ?? null,
+        penalty_ms: parsed.data.penalty_ms,
       });
     }
   }

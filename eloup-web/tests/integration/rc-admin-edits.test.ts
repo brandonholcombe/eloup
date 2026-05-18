@@ -7,6 +7,8 @@ import { applyMigrations } from '@/lib/db/migrate';
 import { importLapMonitorJson } from '@/lib/rc/import';
 import {
   bestLapsForTrack,
+  deleteRace,
+  getRace,
   lapsForRace,
   listRaces,
   setDriverPenalty,
@@ -146,5 +148,135 @@ describe('rc admin edits — end-to-end', () => {
     // The moved race retains its new track assignment — dedupe doesn't reset it.
     const stillOnB = listRaces(db, { trackId: 'track-b' }).map((r) => r.id);
     expect(stillOnB).toContain(race.id);
+  });
+
+  it('deleteRace removes the race row and cascades to rc_race_drivers + rc_laps', () => {
+    const { db } = setup();
+    const race = listRaces(db)[0]!;
+    // Real race — confirm the fixture wrote driver + lap rows for it.
+    const driversBefore = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE race_id = ?`)
+      .get(race.id) as { n: number };
+    const lapsBefore = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_laps WHERE race_id = ?`)
+      .get(race.id) as { n: number };
+    expect(driversBefore.n).toBeGreaterThan(0);
+    expect(lapsBefore.n).toBeGreaterThan(0);
+
+    expect(deleteRace(db, race.id)).toEqual({ status: 'ok' });
+
+    expect(getRace(db, race.id)).toBeNull();
+    const driversAfter = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE race_id = ?`)
+      .get(race.id) as { n: number };
+    const lapsAfter = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_laps WHERE race_id = ?`)
+      .get(race.id) as { n: number };
+    expect(driversAfter.n).toBe(0);
+    expect(lapsAfter.n).toBe(0);
+  });
+
+  it('deleteRace does not touch other races (cross-race isolation)', () => {
+    const { db } = setup();
+    const races = listRaces(db);
+    const raceA = races[0]!;
+    const raceB = races[1]!;
+    // Capture BEFORE counts so the assertion can never pass vacuously
+    // on an empty fixture (reviewer MINOR #6).
+    const bDriversBefore = (
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE race_id = ?`)
+        .get(raceB.id) as { n: number }
+    ).n;
+    const bLapsBefore = (
+      db.prepare(`SELECT COUNT(*) AS n FROM rc_laps WHERE race_id = ?`).get(raceB.id) as {
+        n: number;
+      }
+    ).n;
+    expect(bDriversBefore).toBeGreaterThan(0);
+    expect(bLapsBefore).toBeGreaterThan(0);
+
+    expect(deleteRace(db, raceA.id)).toEqual({ status: 'ok' });
+
+    const bDriversAfter = (
+      db
+        .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE race_id = ?`)
+        .get(raceB.id) as { n: number }
+    ).n;
+    const bLapsAfter = (
+      db.prepare(`SELECT COUNT(*) AS n FROM rc_laps WHERE race_id = ?`).get(raceB.id) as {
+        n: number;
+      }
+    ).n;
+    expect(bDriversAfter).toBe(bDriversBefore);
+    expect(bLapsAfter).toBe(bLapsBefore);
+  });
+
+  it('PATCH penalty placement bracket — laps-locked race keeps placement, hint condition holds', () => {
+    // Reproduces the API-route's before/after bracket at the lib level.
+    // The route reads standingsForRace before setDriverPenalty, then again
+    // after. When the leader has strictly more laps than the runner-up,
+    // even a large penalty cannot demote them — placement_before ===
+    // placement_after === 1 with penalty_ms > 0, i.e. the UX hint fires.
+    const { db } = setup();
+    // Find a race where placement 1 has strictly more laps than placement 2.
+    const races = listRaces(db);
+    let pick: { raceId: string; leaderId: string } | null = null;
+    for (const r of races) {
+      const s = standingsForRace(db, r.id);
+      const p1 = s.find((row) => row.placement === 1);
+      const p2 = s.find((row) => row.placement === 2);
+      if (p1 && p2 && p1.laps_completed > p2.laps_completed) {
+        pick = { raceId: r.id, leaderId: p1.driver_id };
+        break;
+      }
+    }
+    expect(pick).not.toBeNull();
+    if (!pick) return;
+
+    const before = standingsForRace(db, pick.raceId).find(
+      (s) => s.driver_id === pick.leaderId,
+    )!;
+    const placement_before = before.placement;
+    expect(setDriverPenalty(db, pick.raceId, pick.leaderId, 5000)).toEqual({ status: 'ok' });
+    const after = standingsForRace(db, pick.raceId).find(
+      (s) => s.driver_id === pick.leaderId,
+    )!;
+    const placement_after = after.placement;
+
+    expect(placement_before).toBe(1);
+    expect(placement_after).toBe(1);
+    expect(placement_before).toBe(placement_after);
+    // The hint condition: same placement AND non-zero penalty.
+    const penalty_ms = 5000;
+    expect(placement_before === placement_after && penalty_ms > 0).toBe(true);
+  });
+
+  it('PATCH penalty placement bracket — tiebreak race flips placement, hint condition does not hold', () => {
+    // Mirror of the previous test for the placement-changed case. Choose
+    // the same race the first test in this file uses (the one with tight
+    // tiebreaks). A penalty large enough to invert the order produces
+    // placement_before !== placement_after, so the hint does NOT fire.
+    const { db } = setup();
+    const race = listRaces(db)[14]!;
+    const beforeAll = standingsForRace(db, race.id);
+    const leader = beforeAll.find((s) => s.placement === 1)!;
+    const runnerUp = beforeAll.find((s) => s.placement === 2)!;
+    // Skip if the fixture's race 14 has a laps gap (defensive).
+    if (leader.laps_completed !== runnerUp.laps_completed) return;
+
+    const placement_before = leader.placement;
+    const gap = runnerUp.total_time_ms - leader.total_time_ms;
+    const penalty = gap + 1000;
+    expect(setDriverPenalty(db, race.id, leader.driver_id, penalty)).toEqual({ status: 'ok' });
+    const placement_after = standingsForRace(db, race.id).find(
+      (s) => s.driver_id === leader.driver_id,
+    )!.placement;
+
+    expect(placement_before).toBe(1);
+    expect(placement_after).toBe(2);
+    expect(placement_before).not.toBe(placement_after);
+    // Hint condition would NOT fire — placement changed.
+    expect(placement_before === placement_after && penalty > 0).toBe(false);
   });
 });

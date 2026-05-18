@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
-import { setRaceTrack } from '@/lib/db/rc';
+import { deleteRace, setRaceTrack } from '@/lib/db/rc';
 import { canEditRace, type SessionPlayer } from '@/lib/permissions';
 import { createTrack } from '@/lib/rc/tracks';
 
@@ -49,4 +49,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ raceId
     case 'ok':
       return NextResponse.json({ status: 'ok', trackId: resolvedTrackId, matched });
   }
+}
+
+export async function DELETE(_req: Request, { params }: { params: Promise<{ raceId: string }> }) {
+  const session = await auth();
+  if (!session?.user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
+
+  const sp: SessionPlayer = { id: session.user.id, role: session.user.role };
+  if (!canEditRace(sp)) {
+    return NextResponse.json({ error: 'forbidden' }, { status: 403 });
+  }
+
+  const { raceId } = await params;
+  const result = deleteRace(db(), raceId);
+  if (result.status === 'no_row') {
+    return NextResponse.json({ error: 'race not found' }, { status: 404 });
+  }
+  return new NextResponse(null, { status: 204 });
 }

@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { applyMigrations } from '@/lib/db/migrate';
 import {
+  deleteRace,
+  getRace,
   setDriverPenalty,
   setRaceTrack,
   standingsForRace,
@@ -193,5 +195,51 @@ describe('setDriverPenalty', () => {
     // Brandon's transponder (10) < Willy's (20), so Brandon stays 1st.
     expect(standings.find((s) => s.driver_id === brandonId)!.placement).toBe(1);
     expect(standings.find((s) => s.driver_id === willyId)!.placement).toBe(2);
+  });
+});
+
+describe('deleteRace', () => {
+  it('hard-deletes the race row and cascades to rc_race_drivers + rc_laps', () => {
+    const db = freshDb();
+    const { raceId } = seedTwoDriverRace(db);
+    // Seed a few lap rows so cascade has something to clear.
+    db.prepare(
+      `INSERT INTO rc_laps(race_id, driver_id, lap_index, lap_number, lap_time_ms,
+                            end_timestamp_ms, lap_kind)
+       VALUES (?, 'brandon', 0, 1, 3000, 3000, 'normal')`,
+    ).run(raceId);
+    db.prepare(
+      `INSERT INTO rc_laps(race_id, driver_id, lap_index, lap_number, lap_time_ms,
+                            end_timestamp_ms, lap_kind)
+       VALUES (?, 'willy', 0, 1, 3100, 3100, 'normal')`,
+    ).run(raceId);
+
+    expect(deleteRace(db, raceId)).toEqual({ status: 'ok' });
+    expect(getRace(db, raceId)).toBeNull();
+    const drivers = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE race_id = ?`)
+      .get(raceId) as { n: number };
+    expect(drivers.n).toBe(0);
+    const laps = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_laps WHERE race_id = ?`)
+      .get(raceId) as { n: number };
+    expect(laps.n).toBe(0);
+    // rc_drivers rows themselves survive — only the race-scoped rows go.
+    const drivenSurvivors = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_drivers`)
+      .get() as { n: number };
+    expect(drivenSurvivors.n).toBe(2);
+  });
+
+  it('returns no_row for an unknown race id and does not touch other rows', () => {
+    const db = freshDb();
+    const { raceId } = seedTwoDriverRace(db);
+    expect(deleteRace(db, 'missing')).toEqual({ status: 'no_row' });
+    // Race and its driver rows still there.
+    expect(getRace(db, raceId)).not.toBeNull();
+    const drivers = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE race_id = ?`)
+      .get(raceId) as { n: number };
+    expect(drivers.n).toBe(2);
   });
 });

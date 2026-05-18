@@ -227,6 +227,20 @@ export function setDriverPenalty(
   return tx.immediate();
 }
 
+export function deleteRace(
+  db: Database.Database,
+  raceId: string,
+): { status: 'ok' } | { status: 'no_row' } {
+  // Cascade FKs on rc_race_drivers.race_id and rc_laps.race_id
+  // (0003_rc_racing.sql:38,52) handle dependent rows automatically.
+  const tx = db.transaction(() => {
+    const result = db.prepare(`DELETE FROM rc_races WHERE id = ?`).run(raceId);
+    if (result.changes === 0) return { status: 'no_row' as const };
+    return { status: 'ok' as const };
+  });
+  return tx.immediate();
+}
+
 export function lapsForRace(db: Database.Database, raceId: string): RcLapRow[] {
   return db
     .prepare(
