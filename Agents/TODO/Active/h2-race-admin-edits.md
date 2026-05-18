@@ -1,7 +1,45 @@
 # H2 — Race admin edits: track reassignment + penalty time
 
 ## Author: claude-opus-4.7-h2-implementer
-## Status: Not Started
+## Status: In Progress
+
+> **Reviewer fold (2026-05-17).** `claude-sonnet-4-6-h2-reviewer`
+> approved with changes in
+> `Agents/Review-reports/h2-race-admin-edits-review.md`. The load-bearing
+> deltas are folded into this doc below. The four clarifying questions
+> at the bottom of the doc are answered by the reviewer's "Positions on
+> the four flagged questions" section and adopted verbatim.
+>
+> Folded changes:
+>
+> 1. **MAJOR-1** — `setDriverPenalty` uses `db.transaction(...).immediate()`
+>    (not deferred `tx()`) to match `lib/rc/import.ts:198`. Code sample
+>    below updated.
+> 2. **MAJOR-2** — `lib/rc/tracks.ts`'s shared `createTrack` adds a
+>    case-insensitive name short-circuit: `SELECT id FROM rc_tracks
+>    WHERE lower(name) = lower(?)` before `slugify + withSuffix`. If a
+>    row matches, that ID is returned and `matched: true` flows up to
+>    the PATCH route's 200 body. Prevents "Outdoor Long" / "outdoor
+>    long" silent duplicates from a fat-finger.
+> 3. **MINOR-3** — Cross-commit dependency: `RcStandingRow` type +
+>    `standingsForRace` SELECT MUST land together in commit 3.
+>    `page.tsx`'s use of `s.adjusted_total_time_ms` in commit 4 depends
+>    on it.
+> 4. **MINOR-5** — Add a slug-collision unit test for `createTrack`.
+> 5. **MINOR-6** — Add a `setDriverPenalty(db, ..., 600000) → ok`
+>    unit-test assertion to pin the DB-vs-API responsibility split.
+> 6. **NIT-7** — Footnote "Total includes penalty." renders only when
+>    `standings.some(s => s.penalty_ms > 0)`.
+> 7. **Tie-edge case** — Add a unit test for two drivers whose
+>    `total_time_ms + penalty_ms` tie after penalty; tiebreak falls to
+>    `transponder_id ASC`.
+> 8. **Hand-offs (MINOR-4)** — `recentRacesForDriver` still returns
+>    raw `total_time_ms`; R2 should update the SELECT to return
+>    `total_time_ms + penalty_ms AS adjusted_total_time_ms` and update
+>    the driver profile display.
+>
+> The `setDriverPenalty` upper-bound cap stays at the API layer
+> (`max(599_999)`); the DB function accepts any non-negative integer.
 
 > **Author/Reviewer separation note.** Prior implementers are
 > `claude-opus-4.7-{planner,m2,m3,m4,m5,h1,r1}-implementer`; prior
@@ -190,7 +228,7 @@ export function setDriverPenalty(
     }
     return { status: 'ok' as const };
   });
-  return tx();
+  return tx.immediate();
 }
 ```
 
@@ -361,9 +399,19 @@ test under `tests/integration/`. No DB mocks.
     should equal the import order under zero penalties).
   - `setDriverPenalty` rejects negative penalty with `invalid`.
   - `setDriverPenalty` returns `no_row` for an unknown (race, driver).
+  - `setDriverPenalty(db, raceId, driverId, 600000)` → `ok` (pins the
+    DB-vs-API responsibility split: the API rejects ≥ 600000; the DB
+    function accepts any non-negative integer).
   - Recompute reorders: import a fixture race where Brandon finished
     just ahead of Willy by ≤ 1s; apply a 5s penalty to Brandon; assert
     Brandon's placement → 2, Willy's placement → 1.
+  - Tie-on-adjusted-total: two drivers with identical `total_time_ms`;
+    apply a penalty to one such that both adjusted totals still tie;
+    assert tiebreak falls to `transponder_id ASC`.
+- `rc-tracks.test.ts` (new): `createTrack` happy path; slug-collision
+  (two calls with names that slugify identically → second gets a
+  numeric suffix); case-insensitive name match short-circuits to the
+  existing track ID without creating a new row.
 - `rc-permissions.test.ts` (edit): four new cases for `canEditRace`
   (`null`, `'user'`, `'tournament_admin'`, `'global_admin'`).
 - `migrate.test.ts` (edit): assert running migrate twice doesn't add
@@ -597,6 +645,20 @@ deferred:
   ELO. The contract is: read `standingsForRace`'s returned rows;
   trust `placement`. Penalty-adjusted total is the right primitive
   for R2's "did this driver beat that one" judgement.
+- **Driver profile penalty-adjusted total.** `recentRacesForDriver`
+  still returns raw `total_time_ms`; the driver profile page
+  (`/racing/drivers/[driverId]`) therefore shows the unadjusted total
+  for any race that has a non-zero penalty, while the race-detail page
+  shows the adjusted total. R2 should amend the SELECT to return
+  `(rd.total_time_ms + rd.penalty_ms) AS adjusted_total_time_ms` and
+  update the driver profile display so the two surfaces agree.
+- **`layout_notes` invalidation on track change.** Today
+  `rc_tracks.layout_notes` has no UI and no query path. If a future
+  feature ties layout_notes to lap-time validity (e.g., "long layout"
+  vs "short layout" leaderboards), the H2 PATCH route may need to
+  surface a warning when the operator moves a race to a track of a
+  different layout. Documented here so the future consumer doesn't
+  miss it.
 - **H3 — Audit log.** A small `rc_admin_edits` table capturing
   `(race_id, driver_id?, edit_kind, old_value, new_value, edited_by,
   edited_at)` would let the operator answer "who changed Brandon's
