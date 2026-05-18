@@ -1,7 +1,64 @@
 # H4 — Race deletion + penalty UX hint
 
 ## Author: claude-opus-4.7-h4-implementer
-## Status: Not Started
+## Status: In Progress
+
+## Reviewer notes folded in (post-review, 2026-05-17)
+
+The reviewer (`claude-sonnet-4-6-h4-reviewer`) returned
+**APPROVE-WITH-CHANGES** (2 MAJOR, 4 MINOR, 2 NIT). Findings folded
+into the plan below before implementation:
+
+- **[MAJOR #1] `placement` field drop is non-breaking — documented.**
+  No existing HTTP caller reads `placement` from the PATCH penalty
+  response: `RaceAdminPanel.tsx`'s `PenaltyRow` calls
+  `router.refresh()` only and never inspects the response body
+  beyond `error`; existing tests call `setDriverPenalty` /
+  `standingsForRace` at the lib boundary, not via HTTP. Dropping the
+  `placement` field in favour of `placement_before` +
+  `placement_after` therefore breaks zero callers. The Phase B API
+  route notes carry this conclusion explicitly.
+- **[MAJOR #2] Delete button uses `useTransition` + `disabled={pending}`.**
+  The component spec below now requires the same in-flight guard
+  pattern that `TrackChangeForm` and `PenaltyRow` already use. On
+  click: `start(async () => { ... })`; button `disabled` is
+  `!matches || pending`.
+- **[MINOR #3] Confirmation input cleared on non-204 error.**
+  Spec calls out resetting `confirm` state to `''` on any
+  non-success response, preventing a click-without-retype after a
+  401/403/404.
+- **[MINOR #4] `router.refresh()` after `router.push('/racing')`.**
+  Pattern: `router.push('/racing'); router.refresh();` — busts the
+  App Router client cache so the list page does not briefly show
+  the deleted race.
+- **[MINOR #5] `placement_before === null` guard is intentional.**
+  When `standingsForRace` returns no row for the driver (test edge
+  case only), both `_before` and `_after` are `null`; the
+  `typeof === 'number'` guards in the client suppress the hint
+  correctly. Documented inline at the route.
+- **[MINOR #6] Test 7 captures BEFORE count, not vacuous AFTER.**
+  Cross-race isolation test now uses
+  `const before = countFor(raceB); deleteRace(raceA);
+  expect(countFor(raceB)).toBe(before);` so the assertion can never
+  pass on an empty fixture.
+- **[NIT #7] Danger-zone `<hr>` separator made explicit.**
+  Component spec mentions `border-t border-red-900/30` so the
+  implementer does not have to invent it.
+- **[NIT #8] Penalty hint bumped from `text-[10px]` to `text-xs`.**
+  Actionable feedback matches the `text-xs text-red-400` error
+  styling already used in `PenaltyRow`.
+
+### Reviewer's positions on the 5 flagged clarifying questions
+
+1. **Q1 — case sensitivity:** case-insensitive trim match (matches
+   the default).
+2. **Q2 — length cap on confirmation:** no cap; truncating the
+   match target would let any prefix through. Skip.
+3. **Q3 — DELETE response:** 204 no-body (matches the default).
+4. **Q4 — hint re-show on repeated saves:** allow re-show; each
+   save communicates its own outcome.
+5. **Q5 — stale page for second admin:** acceptable for now,
+   already flagged in Hand-offs.
 
 > Two small admin-side additions to the RC racing surface, both
 > extending H2's `RaceAdminPanel`:
@@ -175,21 +232,26 @@ it sent.
 ### `RaceAdminPanel` — Danger zone section
 
 A new `<DangerZone>` sub-component at the bottom of the panel,
-separated from the track + penalty controls by a horizontal rule:
+separated from the track + penalty controls by a top border
+(`border-t border-red-900/30`, per reviewer NIT #7):
 
 - Heading: "Danger zone" (red-toned: `text-red-400`).
 - Subtitle: "Delete this race permanently. Cascades to all driver
   rows and lap times."
 - Confirmation input: `<input type="text" inputmode="text">` with
   placeholder `Type "<race_name_or_kind>" to confirm`.
-- Delete button: `bg-red-600`, `h-tap min-w-tap`, disabled until the
-  typed value matches `(race_name ?? race_kind)` case-insensitively
-  after trim.
-- On click: send `DELETE /api/racing/races/<raceId>`. On 204,
-  `router.push('/racing')` (NOT `router.refresh()` — the current
-  route's race is gone).
-- On non-204 (401/403/404/etc): render inline `<p
-  className="text-xs text-red-400">` with the error message.
+- Delete button: `bg-red-600`, `h-tap min-w-tap`, **uses
+  `useTransition` + `disabled={!matches || pending}`** per reviewer
+  MAJOR #2. The pattern mirrors `TrackChangeForm` / `PenaltyRow`.
+- On click: `start(async () => { const resp = await fetch(url,
+  {method: 'DELETE'}); if (resp.status === 204) { router.push('/racing');
+  router.refresh(); } else { setConfirm(''); setErr(...); } })`. The
+  `router.refresh()` (reviewer MINOR #4) busts the App Router client
+  cache so `/racing` does not briefly render the deleted race.
+- **On non-204 (401/403/404/etc):** reset `confirm` state to `''`
+  (per reviewer MINOR #3) — prevents the button remaining enabled
+  after error without re-typing — and render inline
+  `<p className="text-xs text-red-400">` with the error message.
 
 The confirmation string is the race name when present, else the race
 kind (`race` / `practice` / `qualif`) — same fallback the page header
@@ -260,9 +322,17 @@ Notes:
   driver's `placement` is the new one.
 - `placement_after` is the post-recompute placement.
 - `placement` (the H2 single-field response) is dropped in favour of
-  the more descriptive pair. The single integration test that
-  asserts on the response shape (if any) updates to the new field
-  names.
+  the more descriptive pair. **No existing HTTP caller reads
+  `placement` from the PATCH response body** — `RaceAdminPanel.tsx`'s
+  `PenaltyRow` calls `router.refresh()` only and never inspects the
+  response body beyond `error`; existing tests call `setDriverPenalty`
+  / `standingsForRace` at the lib boundary, not via HTTP. Dropping
+  `placement` is therefore non-breaking (verified by the reviewer,
+  MAJOR #1).
+- `placement_before === null` and `placement_after === null` can
+  happen if `standingsForRace` returns no row for the driver — a
+  test edge case, not a production path. The client's `typeof === 'number'`
+  guards suppress the hint in that case (reviewer MINOR #5).
 - `penalty_ms` is echoed back so the client doesn't have to remember
   what it sent (mostly a convenience; also a sanity check).
 - The two `standingsForRace` calls bracket the mutation. They're
@@ -308,13 +378,14 @@ onChange: (e) => {
 Render below the Save button:
 
 ```tsx
-{hint && <p className="mt-1 text-[10px] text-amber-400">{hint}</p>}
+{hint && <p className="mt-1 text-xs text-amber-400">{hint}</p>}
 ```
 
 Visual: amber (matches the H2 penalty-column accent — same colour
 palette across the page so the operator's eye knows "this is about a
-penalty"). `text-[10px]` matches the existing footnote styling
-elsewhere; small enough not to dominate the row.
+penalty"). `text-xs` (12px) matches the existing error-row styling
+(`text-xs text-red-400`) per reviewer NIT #8 — actionable feedback
+should be as legible as error text.
 
 The hint never appears when:
 
@@ -404,8 +475,12 @@ file (`mkdtempSync` + `applyMigrations`), no DB mocks.
    `SELECT COUNT(*) FROM rc_race_drivers WHERE race_id = ?` is 0
    AND `SELECT COUNT(*) FROM rc_laps WHERE race_id = ?` is 0.
 7. Cross-race isolation: import the fixture (which yields multiple
-   races); DELETE one race; assert another race's row counts in
-   `rc_race_drivers` and `rc_laps` are UNCHANGED.
+   races); capture a BEFORE row count for race B
+   (`SELECT COUNT(*) FROM rc_race_drivers WHERE race_id = ?`);
+   DELETE race A; assert race B's row counts in `rc_race_drivers`
+   and `rc_laps` equal the captured BEFORE count (per reviewer
+   MINOR #6 — without the BEFORE capture the assertion would pass
+   vacuously on an empty fixture).
 8. PATCH penalty response shape: apply a non-zero penalty;
    assert the response body has both `placement_before` and
    `placement_after` as numbers (alongside the existing
