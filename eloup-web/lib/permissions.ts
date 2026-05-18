@@ -20,6 +20,10 @@ export function canUploadRaceResults(s: SessionPlayer | null): boolean {
   return s?.role === 'global_admin';
 }
 
+export function canEditRace(s: SessionPlayer | null): boolean {
+  return s?.role === 'global_admin';
+}
+
 export type AdminNavLink = { href: string; label: string };
 
 export function adminNavLinks(role: Role | undefined): AdminNavLink[] {

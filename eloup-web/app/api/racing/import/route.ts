@@ -1,12 +1,10 @@
 import { NextResponse } from 'next/server';
-import { randomUUID } from 'node:crypto';
-import type Database from 'better-sqlite3';
 import { z } from 'zod';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { canUploadRaceResults, type SessionPlayer } from '@/lib/permissions';
 import { importLapMonitorJson } from '@/lib/rc/import';
-import { slugify, withSuffix } from '@/lib/slug';
+import { createTrack } from '@/lib/rc/tracks';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -39,7 +37,7 @@ export async function POST(req: Request) {
   }
 
   const handle = db();
-  const resolvedTrackId = trackId ?? createTrack(handle, newTrackName!);
+  const resolvedTrackId = trackId ?? createTrack(handle, newTrackName!).trackId;
   const result = importLapMonitorJson(handle, json, resolvedTrackId, sp.id);
 
   if (result.status === 'invalid') {
@@ -51,20 +49,4 @@ export async function POST(req: Request) {
     summary: result.summary,
     raceIds: result.raceIds,
   });
-}
-
-function createTrack(db: Database.Database, name: string): string {
-  const id = randomUUID();
-  const baseSlug = slugify(name) || 'track';
-  let n = 1;
-  const findSlug = db.prepare(`SELECT 1 FROM rc_tracks WHERE slug = ?`);
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
-    const candidate = withSuffix(baseSlug, n);
-    if (!findSlug.get(candidate)) {
-      db.prepare(`INSERT INTO rc_tracks(id, name, slug) VALUES (?, ?, ?)`).run(id, name, candidate);
-      return id;
-    }
-    n++;
-  }
 }

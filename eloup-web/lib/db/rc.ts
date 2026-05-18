@@ -44,6 +44,8 @@ export type RcStandingRow = {
   laps_completed: number;
   best_lap_ms: number | null;
   total_time_ms: number;
+  penalty_ms: number;
+  adjusted_total_time_ms: number;
 };
 
 export type RcLapRow = {
@@ -151,13 +153,78 @@ export function standingsForRace(db: Database.Database, raceId: string): RcStand
   return db
     .prepare(
       `SELECT rd.driver_id, d.display_name, d.player_id, rd.transponder_id, rd.placement,
-              rd.laps_completed, rd.best_lap_ms, rd.total_time_ms
+              rd.laps_completed, rd.best_lap_ms, rd.total_time_ms,
+              rd.penalty_ms,
+              rd.total_time_ms + rd.penalty_ms AS adjusted_total_time_ms
          FROM rc_race_drivers rd
          JOIN rc_drivers d ON d.id = rd.driver_id
         WHERE rd.race_id = ?
         ORDER BY rd.placement`,
     )
     .all(raceId) as RcStandingRow[];
+}
+
+export function setRaceTrack(
+  db: Database.Database,
+  raceId: string,
+  trackId: string,
+): { status: 'ok' } | { status: 'no_race' } | { status: 'no_track' } {
+  const tx = db.transaction(() => {
+    const race = db.prepare(`SELECT id FROM rc_races WHERE id = ?`).get(raceId) as
+      | { id: string }
+      | undefined;
+    if (!race) return { status: 'no_race' as const };
+    const track = db.prepare(`SELECT id FROM rc_tracks WHERE id = ?`).get(trackId) as
+      | { id: string }
+      | undefined;
+    if (!track) return { status: 'no_track' as const };
+    db.prepare(`UPDATE rc_races SET track_id = ? WHERE id = ?`).run(trackId, raceId);
+    return { status: 'ok' as const };
+  });
+  return tx.immediate();
+}
+
+export function setDriverPenalty(
+  db: Database.Database,
+  raceId: string,
+  driverId: string,
+  penaltyMs: number,
+): { status: 'ok' } | { status: 'no_row' } | { status: 'invalid' } {
+  if (!Number.isInteger(penaltyMs) || penaltyMs < 0) {
+    return { status: 'invalid' };
+  }
+  const tx = db.transaction(() => {
+    const updated = db
+      .prepare(
+        `UPDATE rc_race_drivers SET penalty_ms = ? WHERE race_id = ? AND driver_id = ?`,
+      )
+      .run(penaltyMs, raceId, driverId);
+    if (updated.changes === 0) return { status: 'no_row' as const };
+
+    // Re-derive placements in the same tx. Ordering MUST match
+    // comparePlacement() in lib/rc/import.ts (laps DESC, adjusted total
+    // ASC, transponder ASC). If the importer's tiebreak ever changes,
+    // this code path must change with it.
+    const rows = db
+      .prepare(
+        `SELECT driver_id
+           FROM rc_race_drivers
+          WHERE race_id = ?
+          ORDER BY laps_completed DESC,
+                   (total_time_ms + penalty_ms) ASC,
+                   transponder_id ASC`,
+      )
+      .all(raceId) as Array<{ driver_id: string }>;
+
+    const setPlacement = db.prepare(
+      `UPDATE rc_race_drivers SET placement = ? WHERE race_id = ? AND driver_id = ?`,
+    );
+    for (let i = 0; i < rows.length; i++) {
+      setPlacement.run(i + 1, raceId, rows[i]!.driver_id);
+    }
+    return { status: 'ok' as const };
+  });
+  return tx.immediate();
 }
 
 export function lapsForRace(db: Database.Database, raceId: string): RcLapRow[] {

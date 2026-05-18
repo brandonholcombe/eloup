@@ -61,6 +61,12 @@ describe('importLapMonitorJson — happy path against the real fixture', () => {
       .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers`)
       .get() as { n: number };
     expect(standingCount.n).toBe(30);
+
+    // Fresh imports must default penalty_ms to 0 on every row.
+    const nonZeroPenalties = db
+      .prepare(`SELECT COUNT(*) AS n FROM rc_race_drivers WHERE penalty_ms != 0`)
+      .get() as { n: number };
+    expect(nonZeroPenalties.n).toBe(0);
   });
 
   it('placement is derived: (laps_completed DESC, total_time_ms ASC, transponder_id ASC)', () => {

@@ -47,7 +47,53 @@ describe('applyMigrations', () => {
     const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as {
       version: number;
     }[];
-    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5]);
+    db.close();
+  });
+
+  it('0005 adds penalty_ms to rc_race_drivers with default 0 (idempotent)', () => {
+    const path = tempDbPath();
+    const db = new Database(path);
+    db.pragma('foreign_keys = ON');
+    applyMigrations(db);
+    // Re-running migrate must not re-apply 0005.
+    applyMigrations(db);
+
+    const cols = db.prepare(`PRAGMA table_info(rc_race_drivers)`).all() as {
+      name: string;
+      dflt_value: string | number | null;
+      notnull: number;
+    }[];
+    const penalty = cols.find((c) => c.name === 'penalty_ms');
+    expect(penalty).toBeTruthy();
+    expect(penalty!.notnull).toBe(1);
+    // SQLite reports the default as a literal string.
+    expect(String(penalty!.dflt_value)).toBe('0');
+
+    // CHECK constraint rejects negative penalty.
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name) VALUES (?, ?, ?, ?)`,
+    ).run('p1', '111', 'p1', 'P1');
+    db.prepare(
+      `INSERT INTO rc_tracks(id, name, slug) VALUES ('t', 'T', 't')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO rc_drivers(id, lap_monitor_driver_uuid, display_name) VALUES ('d', 'd', 'D')`,
+    ).run();
+    db.prepare(
+      `INSERT INTO rc_races(id, lap_monitor_uuid, track_id, race_started_at, race_kind,
+                            source_blob, uploaded_by)
+       VALUES ('r', 'rr', 't', '2026-05-17', 'race', '{}', 'p1')`,
+    ).run();
+    expect(() =>
+      db
+        .prepare(
+          `INSERT INTO rc_race_drivers(race_id, driver_id, transponder_id, placement,
+                                       laps_completed, total_time_ms, penalty_ms)
+           VALUES ('r', 'd', 1, 1, 5, 1000, -1)`,
+        )
+        .run(),
+    ).toThrow();
     db.close();
   });
 
