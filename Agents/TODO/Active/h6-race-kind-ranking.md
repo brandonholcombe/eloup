@@ -1,7 +1,51 @@
 # H6 — Race-kind-aware ranking + void-laps admin action
 
 ## Author: claude-opus-4.7-h6-implementer
-## Status: Not Started
+## Status: In Progress
+
+## Reviewer findings folded (2026-05-17)
+
+Reviewer `claude-sonnet-4-6-h6-reviewer` returned APPROVE-WITH-CHANGES
+(3 MAJOR, 4 MINOR, 1 NIT). The 3 MAJOR fixes baked into the plan
+before implementation begins:
+
+1. **`standingsForRace` must SELECT `voided_laps_count`** — Phase D
+   scope is extended to include the SELECT-clause addition (not just
+   the `RcStandingRow` type). Without this, the PATCH response's
+   `voided_laps_count` field is silently `undefined`.
+
+2. **Migration 0007 zero-normal-lap fix** — the `ranked_laps` CTE's
+   INNER JOIN to `rc_laps` silently drops drivers with only
+   `initial`/`ignored` laps. Phase G restructured to LEFT JOIN /
+   GROUP BY over `rc_race_drivers`, so zero-normal-lap drivers appear
+   in the result with `n_laps = 0` and sink to the bottom via the
+   existing `CASE WHEN n_laps >= 3 THEN 0 ELSE 1 END` clause.
+
+3. **Phase H "Top-3 avg" column computation path** — the page server
+   component (`app/racing/[raceId]/page.tsx`) reads `lapsForRace`,
+   groups normal laps by driver, applies `rankingLapTimes(asc, voided)`
+   per driver, then averages the first 3. Per-driver
+   `rankingTop3AvgMs: number | null` map is passed into the standings
+   table render (display `—` when `< 3` ranking laps).
+
+Locked positions on the 6 clarifying questions (CQ1–CQ6) match the
+defaults in the plan. Folded specifics:
+
+- CQ2: zod PATCH body uses `.strict()` on each branch — sending both
+  `penalty_ms` and `voided_laps_count` returns 400.
+- CQ5: `computeDriverStats` stays void-blind; rankings top-3 avg is
+  computed in the page server component.
+
+Other folded MINOR fixes:
+
+- `RaceAdminPanel.activePenalties` is race-kind-aware: counts
+  `voidedLapsCount > 0` for qualif/practice, `penaltyMs > 0` for race.
+  Badge copy reads "voids" or "penalties" accordingly.
+- `recomputePlacements` accepts a pre-prepared `lapsStmt` as a param
+  to match the established pattern.
+- `PlacementInput.voidedLapsCount` is removed (the field is the
+  caller's responsibility before constructing `PlacementInput`; the
+  sort consumes only `rankingLapsAscMs`).
 
 > **Author/Reviewer separation note.** Prior implementers are
 > `claude-opus-4.7-{planner,m2,m3,m4,m5,h1,r1,h2,h3,h4,h5}-implementer`;
