@@ -1,7 +1,7 @@
 # H3 — Race time display fix + TXT import support
 
 ## Author: claude-opus-4.7-h3-implementer
-## Status: In Progress
+## Status: Complete
 
 > **Reviewer findings folded in (2026-05-17).** See
 > `Agents/Review-reports/h3-time-fix-and-txt-import-review.md`
