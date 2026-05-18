@@ -20,7 +20,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: eloup-web
-          image: bholcombe/eloup-web:e230644fc451074f8a1326a8b81a106a006e2ebc-dirty
+          image: bholcombe/eloup-web:221128d0703282e4946a78913f015171f1d7b44e-dirty
           imagePullPolicy: Always
           ports:
             - name: http
