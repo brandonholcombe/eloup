@@ -11,6 +11,7 @@ export type RaceAdminPanelDriver = {
   driverId: string;
   displayName: string;
   penaltyMs: number;
+  voidedLapsCount: number;
 };
 
 export function RaceAdminPanel({
@@ -26,20 +27,29 @@ export function RaceAdminPanel({
   tracks: TrackOption[];
   drivers: RaceAdminPanelDriver[];
   raceName: string | null;
-  raceKind: string;
+  raceKind: 'race' | 'practice' | 'qualif';
 }) {
-  const activePenalties = drivers.filter((d) => d.penaltyMs > 0).length;
+  // Race-kind-aware "active" counter: race uses penalty_ms (seconds);
+  // qualif/practice uses voided_laps_count. The badge copy mirrors the
+  // active mechanism to avoid showing "penalties (0)" on a qualif race
+  // where the operator just voided three drivers' laps.
+  const isRace = raceKind === 'race';
+  const activeCount = drivers.filter(
+    (d) => (isRace ? d.penaltyMs : d.voidedLapsCount) > 0,
+  ).length;
+  const activeLabel = isRace ? 'penalties' : 'voids';
   return (
     <details className="mt-6 rounded-md border border-slate-700 bg-slate-900/60">
       <summary className="cursor-pointer px-3 py-2 text-lg font-medium">
         Admin
         <span className="ml-2 text-xs font-normal text-slate-400">
-          track · penalties{activePenalties > 0 ? ` (${activePenalties})` : ''} · delete
+          track · {activeLabel}{activeCount > 0 ? ` (${activeCount})` : ''} · delete
         </span>
       </summary>
       <div className="space-y-3 px-3 pb-3">
         <p className="text-xs text-slate-400">
-          Global admins can re-assign the track and apply penalties.
+          Global admins can re-assign the track and{' '}
+          {isRace ? 'apply penalties' : 'void fastest laps for ranking'}.
         </p>
         <details className="rounded border border-slate-800 bg-slate-900/40">
           <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium">
@@ -51,15 +61,19 @@ export function RaceAdminPanel({
         </details>
         <details className="rounded border border-slate-800 bg-slate-900/40">
           <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium">
-            Apply penalty
-            {activePenalties > 0 && (
+            {isRace ? 'Apply penalty' : 'Void laps'}
+            {activeCount > 0 && (
               <span className="ml-2 text-xs font-normal text-amber-400">
-                {activePenalties} active
+                {activeCount} active
               </span>
             )}
           </summary>
           <div className="px-2 pb-2">
-            <PenaltyTable raceId={raceId} drivers={drivers} />
+            {isRace ? (
+              <PenaltyTable raceId={raceId} drivers={drivers} />
+            ) : (
+              <VoidLapsTable raceId={raceId} drivers={drivers} />
+            )}
           </div>
         </details>
         <details className="rounded border border-red-900/40 bg-red-950/20">
@@ -266,6 +280,127 @@ function PenaltyRow({
                 data.penalty_ms > 0
               ) {
                 setHint('Position unchanged — driver completed more laps');
+              }
+              router.refresh();
+            });
+          }}
+          className="h-tap min-w-tap rounded-md bg-blue-500 px-3 text-xs font-medium text-white disabled:opacity-50"
+        >
+          {pending ? 'Saving…' : 'Save'}
+        </button>
+        {err && <p className="mt-1 text-xs text-red-400">{err}</p>}
+        {hint && <p className="mt-1 text-xs text-amber-400">{hint}</p>}
+      </td>
+    </tr>
+  );
+}
+
+function VoidLapsTable({
+  raceId,
+  drivers,
+}: {
+  raceId: string;
+  drivers: RaceAdminPanelDriver[];
+}) {
+  return (
+    <div className="mt-4">
+      <h3 className="text-xs uppercase tracking-wide text-slate-400">Voided fastest laps</h3>
+      <p className="mb-2 text-[11px] text-slate-500">
+        Voiding N laps skips the driver&apos;s N fastest laps from the top-3-avg ranking.
+      </p>
+      <table className="mt-1 w-full text-sm">
+        <thead>
+          <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+            <th className="py-1 pr-2">Driver</th>
+            <th className="py-1 pr-2 text-right">Void laps</th>
+            <th className="py-1 pr-0 text-right" />
+          </tr>
+        </thead>
+        <tbody>
+          {drivers.map((d) => (
+            <VoidLapsRow key={d.driverId} raceId={raceId} driver={d} />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function VoidLapsRow({
+  raceId,
+  driver,
+}: {
+  raceId: string;
+  driver: RaceAdminPanelDriver;
+}) {
+  const router = useRouter();
+  const [value, setValue] = useState<string>(String(driver.voidedLapsCount));
+  const [err, setErr] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  const [pending, start] = useTransition();
+
+  return (
+    <tr className="border-t border-slate-800">
+      <td className="py-2 pr-2">{driver.displayName}</td>
+      <td className="py-2 pr-2 text-right">
+        <input
+          type="number"
+          inputMode="numeric"
+          step="1"
+          min="0"
+          max="10"
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setHint(null);
+          }}
+          className="h-tap w-20 rounded-md border border-slate-700 bg-slate-900 px-2 text-right font-mono text-sm tabular-nums"
+        />
+      </td>
+      <td className="py-2 pr-0 text-right">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            setErr(null);
+            setHint(null);
+            const n = Number(value);
+            if (!Number.isFinite(n) || n < 0 || !Number.isInteger(n)) {
+              setErr('Enter a non-negative integer');
+              return;
+            }
+            if (n > 10) {
+              setErr('Must be ≤ 10');
+              return;
+            }
+            start(async () => {
+              const resp = await fetch(
+                `/api/racing/races/${raceId}/drivers/${driver.driverId}`,
+                {
+                  method: 'PATCH',
+                  headers: { 'content-type': 'application/json' },
+                  body: JSON.stringify({ voided_laps_count: n }),
+                },
+              );
+              if (!resp.ok) {
+                const body = (await resp.json().catch(() => ({}))) as { error?: string };
+                setErr(body.error ?? `error ${resp.status}`);
+                return;
+              }
+              const data = (await resp.json().catch(() => null)) as {
+                placement_before?: unknown;
+                placement_after?: unknown;
+                voided_laps_count?: unknown;
+              } | null;
+              if (
+                data &&
+                typeof data.placement_before === 'number' &&
+                typeof data.placement_after === 'number' &&
+                typeof data.voided_laps_count === 'number' &&
+                data.placement_before === data.placement_after &&
+                data.voided_laps_count > 0
+              ) {
+                setHint('Position unchanged — ranking uses top-3 avg of remaining laps');
               }
               router.refresh();
             });

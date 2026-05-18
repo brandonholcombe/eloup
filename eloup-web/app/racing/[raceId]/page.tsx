@@ -14,6 +14,7 @@ import { driverColor } from '@/lib/rc/colors';
 import { formatRecordedDate } from '@/lib/rc/datetime';
 import { formatLapMs } from '@/lib/rc/format';
 import { DEFAULT_OUTLIER_MULTIPLIER, isLapOutlier } from '@/lib/rc/outliers';
+import { rankingLapTimes } from '@/lib/rc/placement';
 import { computeDriverStats, type DriverStats } from '@/lib/rc/stats';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,36 @@ export default async function RaceDetailPage({
   const laps = lapsForRace(handle, race.id);
   const hasPenalty = standings.some((s) => s.penalty_ms > 0);
   const tracks = isAdmin ? listTracks(handle) : [];
+
+  // Per-driver "ranking top-3 avg" for qualif/practice standings: this
+  // is the value used by `comparePlacement` to order the standings — i.e.
+  // the top-3-avg AFTER skipping the first `voided_laps_count` fastest
+  // normal laps. Distinct from `computeDriverStats.top3AvgMs`, which is
+  // void-blind (always raw). See h6-race-kind-ranking.md Phase H.
+  const isRankingByTop3Avg =
+    race.race_kind === 'qualif' || race.race_kind === 'practice';
+  const rankingTop3AvgByDriver = new Map<string, number | null>();
+  if (isRankingByTop3Avg) {
+    const normalByDriver = new Map<string, number[]>();
+    for (const l of laps) {
+      if (l.lap_kind !== 'normal') continue;
+      const arr = normalByDriver.get(l.driver_id) ?? [];
+      arr.push(l.lap_time_ms);
+      normalByDriver.set(l.driver_id, arr);
+    }
+    for (const s of standings) {
+      const ascAll = (normalByDriver.get(s.driver_id) ?? []).slice().sort((a, b) => a - b);
+      const ranking = rankingLapTimes(ascAll, s.voided_laps_count);
+      if (ranking.length < 3) {
+        rankingTop3AvgByDriver.set(s.driver_id, null);
+      } else {
+        rankingTop3AvgByDriver.set(
+          s.driver_id,
+          (ranking[0]! + ranking[1]! + ranking[2]!) / 3,
+        );
+      }
+    }
+  }
 
   const bestByDriver = new Map(standings.map((s) => [s.driver_id, s.best_lap_ms]));
   let outlierCount = 0;
@@ -93,6 +124,8 @@ export default async function RaceDetailPage({
     </section>
   );
 
+  const hasVoid = standings.some((s) => s.voided_laps_count > 0);
+
   const standingsSection = (
     <section>
       <h2 className="text-lg font-medium">Final standings</h2>
@@ -103,7 +136,11 @@ export default async function RaceDetailPage({
             <th className="py-2 pr-2">Driver</th>
             <th className="py-2 pr-2 text-right">Laps</th>
             <th className="py-2 pr-2 text-right">Best</th>
-            <th className="py-2 pr-2 text-right">Penalty</th>
+            {isRankingByTop3Avg ? (
+              <th className="py-2 pr-2 text-right">Top-3 avg</th>
+            ) : (
+              <th className="py-2 pr-2 text-right">Penalty</th>
+            )}
             <th className="py-2 pr-0 text-right">Total</th>
           </tr>
         </thead>
@@ -126,17 +163,31 @@ export default async function RaceDetailPage({
               </td>
               <td className="py-2 pr-2 text-right font-mono tabular-nums">
                 {s.laps_completed}
+                {isRankingByTop3Avg && s.voided_laps_count > 0 && (
+                  <span className="ml-1 text-amber-400 text-[10px]">
+                    -{s.voided_laps_count}
+                  </span>
+                )}
               </td>
               <td className="py-2 pr-2 text-right font-mono tabular-nums">
                 {s.best_lap_ms != null ? formatLapMs(s.best_lap_ms) : '—'}
               </td>
-              <td className="py-2 pr-2 text-right font-mono tabular-nums">
-                {s.penalty_ms > 0 ? (
-                  <span className="text-amber-400">+{(s.penalty_ms / 1000).toFixed(1)}s</span>
-                ) : (
-                  '—'
-                )}
-              </td>
+              {isRankingByTop3Avg ? (
+                <td className="py-2 pr-2 text-right font-mono tabular-nums">
+                  {(() => {
+                    const v = rankingTop3AvgByDriver.get(s.driver_id);
+                    return v == null ? '—' : formatLapMs(v);
+                  })()}
+                </td>
+              ) : (
+                <td className="py-2 pr-2 text-right font-mono tabular-nums">
+                  {s.penalty_ms > 0 ? (
+                    <span className="text-amber-400">+{(s.penalty_ms / 1000).toFixed(1)}s</span>
+                  ) : (
+                    '—'
+                  )}
+                </td>
+              )}
               <td className="py-2 pr-0 text-right font-mono tabular-nums">
                 {formatLapMs(s.adjusted_total_time_ms)}
               </td>
@@ -144,8 +195,13 @@ export default async function RaceDetailPage({
           ))}
         </tbody>
       </table>
-      {hasPenalty && (
+      {hasPenalty && !isRankingByTop3Avg && (
         <p className="mt-1 text-[11px] text-slate-500">Total includes penalty.</p>
+      )}
+      {isRankingByTop3Avg && hasVoid && (
+        <p className="mt-1 text-[11px] text-slate-500">
+          Voided laps skip the driver&apos;s N fastest from the top-3-avg ranking.
+        </p>
       )}
     </section>
   );
@@ -187,6 +243,7 @@ export default async function RaceDetailPage({
             driverId: s.driver_id,
             displayName: s.display_name,
             penaltyMs: s.penalty_ms,
+            voidedLapsCount: s.voided_laps_count,
           }))}
           raceName={race.race_name}
           raceKind={race.race_kind}

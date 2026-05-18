@@ -69,23 +69,28 @@ describe('importLapMonitorJson — happy path against the real fixture', () => {
     expect(nonZeroPenalties.n).toBe(0);
   });
 
-  it('placement is derived: (laps_completed DESC, total_time_ms ASC, transponder_id ASC)', () => {
+  it('race-kind placement: (laps DESC, total_time_ms ASC, transponder ASC)', () => {
     const db = freshDb();
     const uploader = seedUploader(db);
     const trackId = seedTrack(db);
     importLapMonitorJson(db, loadFixture(), trackId, uploader);
 
+    // After H6, the placement-ordering invariant differs by race_kind.
+    // For `race` kind: laps DESC, adjusted-total ASC. For qualif/practice
+    // the standings are top-3-avg ranked (asserted in a sibling test).
     const rows = db
       .prepare(
-        `SELECT r.race_name, d.display_name, rd.placement, rd.laps_completed,
-                rd.total_time_ms, rd.transponder_id
+        `SELECT r.race_name, r.race_kind, d.display_name, rd.placement,
+                rd.laps_completed, rd.total_time_ms, rd.transponder_id
            FROM rc_race_drivers rd
            JOIN rc_races r   ON r.id = rd.race_id
            JOIN rc_drivers d ON d.id = rd.driver_id
+          WHERE r.race_kind = 'race'
           ORDER BY r.race_name, rd.placement`,
       )
       .all() as {
       race_name: string;
+      race_kind: string;
       display_name: string;
       placement: number;
       laps_completed: number;
@@ -99,6 +104,7 @@ describe('importLapMonitorJson — happy path against the real fixture', () => {
       arr.push(r);
       byRace.set(r.race_name, arr);
     }
+    expect(byRace.size).toBeGreaterThan(0);
     for (const [name, race] of byRace) {
       for (let i = 1; i < race.length; i++) {
         const a = race[i - 1]!;
@@ -107,6 +113,62 @@ describe('importLapMonitorJson — happy path against the real fixture', () => {
           a.laps_completed > b.laps_completed ||
           (a.laps_completed === b.laps_completed && a.total_time_ms <= b.total_time_ms);
         expect(ok, `${name}: placement #${a.placement} should beat #${b.placement}`).toBe(true);
+      }
+    }
+  });
+
+  it('qualif/practice placement: top-3-avg ASC of normal laps', () => {
+    const db = freshDb();
+    const uploader = seedUploader(db);
+    const trackId = seedTrack(db);
+    importLapMonitorJson(db, loadFixture(), trackId, uploader);
+
+    // For each qualif/practice race, the leader (placement 1) must have
+    // top-3-avg <= every subsequent placement's top-3-avg (when both have
+    // ≥ 3 normal laps). Drivers with <3 normal laps sink to the bottom.
+    const races = db
+      .prepare(
+        `SELECT id, race_name, race_kind FROM rc_races
+          WHERE race_kind IN ('qualif','practice')`,
+      )
+      .all() as { id: string; race_name: string; race_kind: string }[];
+    expect(races.length).toBeGreaterThan(0);
+
+    for (const r of races) {
+      const standings = db
+        .prepare(
+          `SELECT rd.driver_id, rd.placement, rd.laps_completed
+             FROM rc_race_drivers rd
+            WHERE rd.race_id = ?
+            ORDER BY rd.placement`,
+        )
+        .all(r.id) as { driver_id: string; placement: number; laps_completed: number }[];
+      const top3ByDriver = new Map<string, number | null>();
+      for (const s of standings) {
+        const laps = db
+          .prepare(
+            `SELECT lap_time_ms FROM rc_laps
+              WHERE race_id = ? AND driver_id = ? AND lap_kind = 'normal'
+              ORDER BY lap_time_ms ASC LIMIT 3`,
+          )
+          .all(r.id, s.driver_id) as { lap_time_ms: number }[];
+        top3ByDriver.set(
+          s.driver_id,
+          laps.length >= 3 ? (laps[0]!.lap_time_ms + laps[1]!.lap_time_ms + laps[2]!.lap_time_ms) / 3 : null,
+        );
+      }
+      for (let i = 1; i < standings.length; i++) {
+        const a = standings[i - 1]!;
+        const b = standings[i]!;
+        const aT = top3ByDriver.get(a.driver_id);
+        const bT = top3ByDriver.get(b.driver_id);
+        if (aT == null && bT == null) continue;
+        if (aT == null) {
+          // a has <3 laps but b doesn't? a must be after — impossible here.
+          throw new Error(`${r.race_name}: <3-lap driver ranked above 3+-lap driver`);
+        }
+        if (bT == null) continue; // a has ≥3, b has <3 — a wins by sink rule.
+        expect(aT, `${r.race_name}: placement ${a.placement} (${aT}) <= ${b.placement} (${bT})`).toBeLessThanOrEqual(bT);
       }
     }
   });

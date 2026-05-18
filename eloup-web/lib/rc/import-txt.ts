@@ -2,6 +2,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 
 import type { ImportResult, ImportSummary } from './import';
+import {
+  comparePlacement,
+  rankingLapTimes,
+  type PlacementInput,
+} from './placement';
 
 // TXT has no offset on the race date (the operator's TXT export writes
 // "May 17, 2026 at 2:54:26 PM" with no zone label). We store the
@@ -64,6 +69,7 @@ type DriverStandings = {
   lapsCompleted: number;
   bestLapMs: number | null;
   totalTimeMs: number;
+  normalLapsAscMs: number[];
 };
 
 // Lap Monitor TXT lap-time format: "MM:SS.HH" (HH = hundredths of a
@@ -312,7 +318,21 @@ export function importLapMonitorTxt(
       standingsByDriverId.set(driverId, computeTxtStandings(driverId, driver));
     }
 
-    const sorted = [...standingsByDriverId.values()].sort(comparePlacement);
+    const inputs: PlacementInput[] = [...standingsByDriverId.values()].map((s) => ({
+      driverId: s.driverId,
+      lapsCompleted: s.lapsCompleted,
+      bestLapMs: s.bestLapMs,
+      totalTimeMs: s.totalTimeMs,
+      penaltyMs: 0,
+      rankingLapsAscMs: rankingLapTimes(s.normalLapsAscMs, 0),
+      transponderId: s.transponderId,
+    }));
+    // All TXT drivers have transponderId = 0, so the tiebreak among ties
+    // falls to V8's stable sort (insertion order = the TXT's own summary
+    // table order). Acceptable for TXT — see h6-race-kind-ranking.md
+    // coverage notes.
+    inputs.sort((a, b) => comparePlacement(a, b, parsed.raceKind));
+    const sorted = inputs.map((p) => standingsByDriverId.get(p.driverId)!);
     const raceId = randomUUID();
     insertRace.run(
       raceId,
@@ -393,24 +413,22 @@ function computeTxtStandings(driverId: string, driver: ParsedDriver): DriverStan
   let lapsCompleted = 0;
   let bestLapMs: number | null = null;
   let totalTimeMs = 0;
+  const normalLapsAscMs: number[] = [];
   for (const lap of driver.laps) {
     if (lap.kind === 'normal') {
       lapsCompleted++;
       if (bestLapMs === null || lap.lapTimeMs < bestLapMs) bestLapMs = lap.lapTimeMs;
       if (lap.endTimestampMs > totalTimeMs) totalTimeMs = lap.endTimestampMs;
+      normalLapsAscMs.push(lap.lapTimeMs);
     }
   }
+  normalLapsAscMs.sort((a, b) => a - b);
   return {
     driverId,
     transponderId: 0,
     lapsCompleted,
     bestLapMs,
     totalTimeMs,
+    normalLapsAscMs,
   };
-}
-
-function comparePlacement(a: DriverStandings, b: DriverStandings): number {
-  if (a.lapsCompleted !== b.lapsCompleted) return b.lapsCompleted - a.lapsCompleted;
-  if (a.totalTimeMs !== b.totalTimeMs) return a.totalTimeMs - b.totalTimeMs;
-  return a.transponderId - b.transponderId;
 }

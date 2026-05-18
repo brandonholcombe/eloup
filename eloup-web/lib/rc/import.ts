@@ -2,6 +2,12 @@ import { randomUUID } from 'node:crypto';
 import type Database from 'better-sqlite3';
 import { z } from 'zod';
 
+import {
+  comparePlacement,
+  rankingLapTimes,
+  type PlacementInput,
+} from './placement';
+
 // Lap Monitor encodes lap durations and endTimestamps as integer centiseconds
 // (1/100 second), not milliseconds. RC racing laps are typically 17-30 seconds;
 // a "duration: 2171" lap is 21.71s, not 2.171s. The DB columns are named
@@ -58,6 +64,8 @@ type DriverStandings = {
   lapsCompleted: number;
   bestLapMs: number | null;
   totalTimeMs: number;
+  // Normal lap times sorted asc (used to build PlacementInput.rankingLapsAscMs).
+  normalLapsAscMs: number[];
 };
 
 // Whole-file-fatal validation policy (Phase B): any malformed race kills the
@@ -159,7 +167,20 @@ export function importLapMonitorJson(
         standingsByDriverId.set(driverId, computeStandings(driverId, driver));
       }
 
-      const sorted = [...standingsByDriverId.values()].sort(comparePlacement);
+      const inputs: PlacementInput[] = [...standingsByDriverId.values()].map((s) => ({
+        driverId: s.driverId,
+        lapsCompleted: s.lapsCompleted,
+        bestLapMs: s.bestLapMs,
+        totalTimeMs: s.totalTimeMs,
+        penaltyMs: 0,
+        // On fresh import voidedLapsCount = 0, so rankingLapsAscMs ===
+        // normalLapsAscMs. The helper call documents intent.
+        rankingLapsAscMs: rankingLapTimes(s.normalLapsAscMs, 0),
+        transponderId: s.transponderId,
+      }));
+      inputs.sort((a, b) => comparePlacement(a, b, race.kind));
+      const standingsByDriverIdLookup = standingsByDriverId;
+      const sorted = inputs.map((p) => standingsByDriverIdLookup.get(p.driverId)!);
       const raceId = randomUUID();
       insertRace.run(
         raceId,
@@ -256,30 +277,28 @@ function computeStandings(driverId: string, driver: DriverRow): DriverStandings 
   let lapsCompleted = 0;
   let bestLapMs: number | null = null;
   let totalTimeMs = 0;
+  const normalLapsAscMs: number[] = [];
   for (const lap of driver.laps) {
     const lapMs = lap.duration * LAP_MONITOR_CS_TO_MS;
     const endMs = lap.endTimestamp * LAP_MONITOR_CS_TO_MS;
     if (lap.kind === 'normal') {
       lapsCompleted++;
       if (bestLapMs === null || lapMs < bestLapMs) bestLapMs = lapMs;
+      normalLapsAscMs.push(lapMs);
     }
     if (lap.kind === 'normal' || lap.kind === 'ignored') {
       if (endMs > totalTimeMs) totalTimeMs = endMs;
     }
   }
+  normalLapsAscMs.sort((a, b) => a - b);
   return {
     driverId,
     transponderId: driver.transponderId,
     lapsCompleted,
     bestLapMs,
     totalTimeMs,
+    normalLapsAscMs,
   };
-}
-
-function comparePlacement(a: DriverStandings, b: DriverStandings): number {
-  if (a.lapsCompleted !== b.lapsCompleted) return b.lapsCompleted - a.lapsCompleted;
-  if (a.totalTimeMs !== b.totalTimeMs) return a.totalTimeMs - b.totalTimeMs;
-  return a.transponderId - b.transponderId;
 }
 
 function formatZodError(err: z.ZodError): string {

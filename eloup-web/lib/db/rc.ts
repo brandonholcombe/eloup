@@ -1,4 +1,10 @@
 import type Database from 'better-sqlite3';
+import {
+  comparePlacement,
+  rankingLapTimes,
+  type PlacementInput,
+  type RaceKind,
+} from '@/lib/rc/placement';
 
 export type RcTrackRow = {
   id: string;
@@ -45,6 +51,7 @@ export type RcStandingRow = {
   best_lap_ms: number | null;
   total_time_ms: number;
   penalty_ms: number;
+  voided_laps_count: number;
   adjusted_total_time_ms: number;
 };
 
@@ -160,7 +167,7 @@ export function standingsForRace(db: Database.Database, raceId: string): RcStand
     .prepare(
       `SELECT rd.driver_id, d.display_name, d.player_id, rd.transponder_id, rd.placement,
               rd.laps_completed, rd.best_lap_ms, rd.total_time_ms,
-              rd.penalty_ms,
+              rd.penalty_ms, rd.voided_laps_count,
               rd.total_time_ms + rd.penalty_ms AS adjusted_total_time_ms
          FROM rc_race_drivers rd
          JOIN rc_drivers d ON d.id = rd.driver_id
@@ -190,6 +197,63 @@ export function setRaceTrack(
   return tx.immediate();
 }
 
+// Shared placement-recompute primitive. Replaces the previous SQL
+// ORDER-BY recompute with a JS sort using `comparePlacement` — there is
+// now ONE authoritative sort function (lib/rc/placement.ts) for both the
+// importer at insert time and any admin edit (penalty or void). Drift
+// risk between SQL and JS sort orderings is gone by construction.
+//
+// `lapsStmt` is passed in pre-prepared (matching the pattern in
+// `importLapMonitorJson`) — we'd otherwise re-prepare it on every
+// `setDriverPenalty` / `setVoidedLapsCount` call.
+function recomputePlacements(
+  db: Database.Database,
+  raceId: string,
+  lapsStmt: Database.Statement,
+  setPlacementStmt: Database.Statement,
+): void {
+  const race = db
+    .prepare(`SELECT race_kind FROM rc_races WHERE id = ?`)
+    .get(raceId) as { race_kind: RaceKind } | undefined;
+  if (!race) return;
+
+  const drivers = db
+    .prepare(
+      `SELECT driver_id, laps_completed, best_lap_ms, total_time_ms,
+              penalty_ms, voided_laps_count, transponder_id
+         FROM rc_race_drivers
+        WHERE race_id = ?`,
+    )
+    .all(raceId) as Array<{
+    driver_id: string;
+    laps_completed: number;
+    best_lap_ms: number | null;
+    total_time_ms: number;
+    penalty_ms: number;
+    voided_laps_count: number;
+    transponder_id: number;
+  }>;
+
+  const inputs: PlacementInput[] = drivers.map((d) => {
+    const lapRows = lapsStmt.all(raceId, d.driver_id) as Array<{ lap_time_ms: number }>;
+    const normalAsc = lapRows.map((r) => r.lap_time_ms);
+    return {
+      driverId: d.driver_id,
+      lapsCompleted: d.laps_completed,
+      bestLapMs: d.best_lap_ms,
+      totalTimeMs: d.total_time_ms,
+      penaltyMs: d.penalty_ms,
+      rankingLapsAscMs: rankingLapTimes(normalAsc, d.voided_laps_count),
+      transponderId: d.transponder_id,
+    };
+  });
+  inputs.sort((a, b) => comparePlacement(a, b, race.race_kind));
+
+  for (let i = 0; i < inputs.length; i++) {
+    setPlacementStmt.run(i + 1, raceId, inputs[i]!.driverId);
+  }
+}
+
 export function setDriverPenalty(
   db: Database.Database,
   raceId: string,
@@ -199,6 +263,14 @@ export function setDriverPenalty(
   if (!Number.isInteger(penaltyMs) || penaltyMs < 0) {
     return { status: 'invalid' };
   }
+  const lapsStmt = db.prepare(
+    `SELECT lap_time_ms FROM rc_laps
+      WHERE race_id = ? AND driver_id = ? AND lap_kind = 'normal'
+      ORDER BY lap_time_ms ASC`,
+  );
+  const setPlacementStmt = db.prepare(
+    `UPDATE rc_race_drivers SET placement = ? WHERE race_id = ? AND driver_id = ?`,
+  );
   const tx = db.transaction(() => {
     const updated = db
       .prepare(
@@ -206,28 +278,37 @@ export function setDriverPenalty(
       )
       .run(penaltyMs, raceId, driverId);
     if (updated.changes === 0) return { status: 'no_row' as const };
+    recomputePlacements(db, raceId, lapsStmt, setPlacementStmt);
+    return { status: 'ok' as const };
+  });
+  return tx.immediate();
+}
 
-    // Re-derive placements in the same tx. Ordering MUST match
-    // comparePlacement() in lib/rc/import.ts (laps DESC, adjusted total
-    // ASC, transponder ASC). If the importer's tiebreak ever changes,
-    // this code path must change with it.
-    const rows = db
+export function setVoidedLapsCount(
+  db: Database.Database,
+  raceId: string,
+  driverId: string,
+  count: number,
+): { status: 'ok' } | { status: 'no_row' } | { status: 'invalid' } {
+  if (!Number.isInteger(count) || count < 0) {
+    return { status: 'invalid' };
+  }
+  const lapsStmt = db.prepare(
+    `SELECT lap_time_ms FROM rc_laps
+      WHERE race_id = ? AND driver_id = ? AND lap_kind = 'normal'
+      ORDER BY lap_time_ms ASC`,
+  );
+  const setPlacementStmt = db.prepare(
+    `UPDATE rc_race_drivers SET placement = ? WHERE race_id = ? AND driver_id = ?`,
+  );
+  const tx = db.transaction(() => {
+    const updated = db
       .prepare(
-        `SELECT driver_id
-           FROM rc_race_drivers
-          WHERE race_id = ?
-          ORDER BY laps_completed DESC,
-                   (total_time_ms + penalty_ms) ASC,
-                   transponder_id ASC`,
+        `UPDATE rc_race_drivers SET voided_laps_count = ? WHERE race_id = ? AND driver_id = ?`,
       )
-      .all(raceId) as Array<{ driver_id: string }>;
-
-    const setPlacement = db.prepare(
-      `UPDATE rc_race_drivers SET placement = ? WHERE race_id = ? AND driver_id = ?`,
-    );
-    for (let i = 0; i < rows.length; i++) {
-      setPlacement.run(i + 1, raceId, rows[i]!.driver_id);
-    }
+      .run(count, raceId, driverId);
+    if (updated.changes === 0) return { status: 'no_row' as const };
+    recomputePlacements(db, raceId, lapsStmt, setPlacementStmt);
     return { status: 'ok' as const };
   });
   return tx.immediate();

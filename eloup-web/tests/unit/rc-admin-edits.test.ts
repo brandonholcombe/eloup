@@ -11,6 +11,7 @@ import {
   setDriverPenalty,
   setDriverPlayer,
   setRaceTrack,
+  setVoidedLapsCount,
   standingsForRace,
 } from '@/lib/db/rc';
 
@@ -275,6 +276,166 @@ describe('setDriverPlayer', () => {
     expect(unlinked!.linked_display_name).toBeNull();
     expect(unlinked!.linked_discord_handle).toBeNull();
     expect(unlinked!.linked_avatar_url).toBeNull();
+  });
+});
+
+// Seed a qualif race with 3 drivers and known normal-lap times. Used
+// for setVoidedLapsCount tests: voiding the leader's fastest lap can
+// shift their top-3-avg above the runner-up's.
+function seedQualifRace(db: Database.Database): {
+  raceId: string;
+  trackId: string;
+  alphaId: string;
+  bravoId: string;
+  charlieId: string;
+} {
+  db.prepare(
+    `INSERT INTO players(id, discord_id, discord_handle, display_name, role)
+     VALUES ('admin', 'admin', 'admin', 'Admin', 'global_admin')`,
+  ).run();
+  db.prepare(`INSERT INTO rc_tracks(id, name, slug) VALUES ('tq', 'TrackQ', 'tq')`).run();
+  // Alpha: ranking laps fast, but top fastest is dominant. transponder 10.
+  db.prepare(
+    `INSERT INTO rc_drivers(id, lap_monitor_driver_uuid, display_name) VALUES ('alpha', 'a-uuid', 'Alpha')`,
+  ).run();
+  // Bravo: more consistent, transponder 20.
+  db.prepare(
+    `INSERT INTO rc_drivers(id, lap_monitor_driver_uuid, display_name) VALUES ('bravo', 'b-uuid', 'Bravo')`,
+  ).run();
+  // Charlie: slower, transponder 30.
+  db.prepare(
+    `INSERT INTO rc_drivers(id, lap_monitor_driver_uuid, display_name) VALUES ('charlie', 'c-uuid', 'Charlie')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO rc_races(id, lap_monitor_uuid, track_id, race_started_at, race_kind,
+                          source_blob, uploaded_by)
+     VALUES ('rq', 'rq', 'tq', '2026-05-17T00:00:00Z', 'qualif', '{}', 'admin')`,
+  ).run();
+  db.prepare(
+    `INSERT INTO rc_race_drivers(race_id, driver_id, transponder_id, placement,
+                                 laps_completed, best_lap_ms, total_time_ms)
+     VALUES ('rq', 'alpha', 10, 1, 4, 10000, 100000)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO rc_race_drivers(race_id, driver_id, transponder_id, placement,
+                                 laps_completed, best_lap_ms, total_time_ms)
+     VALUES ('rq', 'bravo', 20, 2, 4, 20000, 100000)`,
+  ).run();
+  db.prepare(
+    `INSERT INTO rc_race_drivers(race_id, driver_id, transponder_id, placement,
+                                 laps_completed, best_lap_ms, total_time_ms)
+     VALUES ('rq', 'charlie', 30, 3, 4, 25000, 100000)`,
+  ).run();
+  // Alpha laps: 10000 (fast), 21000, 22000, 30000 → top3 raw avg ~17666
+  // Bravo laps: 20000, 20500, 21000, 30000 → top3 raw avg 20500
+  // Charlie laps: 25000, 26000, 27000, 30000 → top3 raw avg 26000
+  const insertLap = db.prepare(
+    `INSERT INTO rc_laps(race_id, driver_id, lap_index, lap_number,
+                          lap_time_ms, end_timestamp_ms, lap_kind)
+     VALUES (?, ?, ?, ?, ?, ?, 'normal')`,
+  );
+  const alphaLaps = [10_000, 21_000, 22_000, 30_000];
+  const bravoLaps = [20_000, 20_500, 21_000, 30_000];
+  const charlieLaps = [25_000, 26_000, 27_000, 30_000];
+  alphaLaps.forEach((ms, i) =>
+    insertLap.run('rq', 'alpha', i, i + 1, ms, (i + 1) * 30_000, ),
+  );
+  bravoLaps.forEach((ms, i) =>
+    insertLap.run('rq', 'bravo', i, i + 1, ms, (i + 1) * 30_000),
+  );
+  charlieLaps.forEach((ms, i) =>
+    insertLap.run('rq', 'charlie', i, i + 1, ms, (i + 1) * 30_000),
+  );
+  return {
+    raceId: 'rq',
+    trackId: 'tq',
+    alphaId: 'alpha',
+    bravoId: 'bravo',
+    charlieId: 'charlie',
+  };
+}
+
+describe('setVoidedLapsCount', () => {
+  it('happy: writes the value and standings reflect voided_laps_count', () => {
+    const db = freshDb();
+    const { raceId, alphaId } = seedQualifRace(db);
+    expect(setVoidedLapsCount(db, raceId, alphaId, 1)).toEqual({ status: 'ok' });
+    const standings = standingsForRace(db, raceId);
+    const alpha = standings.find((s) => s.driver_id === alphaId)!;
+    expect(alpha.voided_laps_count).toBe(1);
+  });
+
+  it('invalid: negative count → invalid, no row touched', () => {
+    const db = freshDb();
+    const { raceId, alphaId } = seedQualifRace(db);
+    expect(setVoidedLapsCount(db, raceId, alphaId, -1)).toEqual({ status: 'invalid' });
+    const alpha = standingsForRace(db, raceId).find((s) => s.driver_id === alphaId)!;
+    expect(alpha.voided_laps_count).toBe(0);
+  });
+
+  it('invalid: non-integer count → invalid', () => {
+    const db = freshDb();
+    const { raceId, alphaId } = seedQualifRace(db);
+    expect(setVoidedLapsCount(db, raceId, alphaId, 1.5)).toEqual({ status: 'invalid' });
+    expect(setVoidedLapsCount(db, raceId, alphaId, Number.NaN)).toEqual({
+      status: 'invalid',
+    });
+  });
+
+  it('no_row: unknown (race, driver) → no_row', () => {
+    const db = freshDb();
+    const { raceId } = seedQualifRace(db);
+    expect(setVoidedLapsCount(db, raceId, 'nope', 1)).toEqual({ status: 'no_row' });
+    expect(setVoidedLapsCount(db, 'nope', 'alpha', 1)).toEqual({ status: 'no_row' });
+  });
+
+  it('voiding the leader\'s fastest lap reorders placement', () => {
+    const db = freshDb();
+    const { raceId, alphaId, bravoId } = seedQualifRace(db);
+    // After import, Alpha leads (raw top3 ~17666 < Bravo's 20500).
+    // Recompute placements with current data (the seed inserts placement
+    // values pre-H6; the recompute via setVoidedLapsCount fires below).
+    // First, set voided=0 to trigger a recompute and pin baseline.
+    setVoidedLapsCount(db, raceId, alphaId, 0);
+    let standings = standingsForRace(db, raceId);
+    expect(standings.find((s) => s.driver_id === alphaId)!.placement).toBe(1);
+    expect(standings.find((s) => s.driver_id === bravoId)!.placement).toBe(2);
+
+    // Void Alpha's fastest lap → Alpha's top-3 becomes [21k, 22k, 30k]
+    // (avg ~24333) which is worse than Bravo's 20500.
+    expect(setVoidedLapsCount(db, raceId, alphaId, 1)).toEqual({ status: 'ok' });
+    standings = standingsForRace(db, raceId);
+    expect(standings.find((s) => s.driver_id === bravoId)!.placement).toBe(1);
+    expect(standings.find((s) => s.driver_id === alphaId)!.placement).toBe(2);
+  });
+
+  it('over-voided edge case: voiding 11 laps when only 4 exist sinks the driver to last', () => {
+    const db = freshDb();
+    const { raceId, alphaId, charlieId } = seedQualifRace(db);
+    // 11 voids on alpha → no ranking laps left → alpha falls to <3-lap
+    // fallback tier, ranked by best_lap_ms (still 10000, so alpha beats
+    // charlie if charlie also had <3 laps — but charlie has all 4 normal
+    // laps). Alpha sinks below both 3+-lap drivers.
+    expect(setVoidedLapsCount(db, raceId, alphaId, 11)).toEqual({ status: 'ok' });
+    const standings = standingsForRace(db, raceId);
+    const alpha = standings.find((s) => s.driver_id === alphaId)!;
+    const charlie = standings.find((s) => s.driver_id === charlieId)!;
+    expect(alpha.voided_laps_count).toBe(11);
+    // Alpha should be last (placement 3): both Bravo and Charlie have
+    // ≥3 ranking laps, while Alpha has 0.
+    expect(alpha.placement).toBe(3);
+    // Charlie is the slowest 3-lap driver but still beats over-voided Alpha.
+    expect(charlie.placement).toBeLessThan(alpha.placement);
+  });
+
+  it('clearing voided_laps_count back to 0 restores the original ranking', () => {
+    const db = freshDb();
+    const { raceId, alphaId, bravoId } = seedQualifRace(db);
+    setVoidedLapsCount(db, raceId, alphaId, 1);
+    expect(setVoidedLapsCount(db, raceId, alphaId, 0)).toEqual({ status: 'ok' });
+    const standings = standingsForRace(db, raceId);
+    expect(standings.find((s) => s.driver_id === alphaId)!.placement).toBe(1);
+    expect(standings.find((s) => s.driver_id === bravoId)!.placement).toBe(2);
   });
 });
 
