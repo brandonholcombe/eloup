@@ -1,7 +1,7 @@
 # H5 — Race-detail QoL: desktop layout, chart toggle, Discord linking, 3-up compare
 
 ## Author: claude-opus-4.7-h5-implementer
-## Status: In Progress
+## Status: Complete
 
 ## Reviewer findings folded (2026-05-17)
 
