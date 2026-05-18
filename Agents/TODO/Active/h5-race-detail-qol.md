@@ -1,7 +1,67 @@
 # H5 — Race-detail QoL: desktop layout, chart toggle, Discord linking, 3-up compare
 
 ## Author: claude-opus-4.7-h5-implementer
-## Status: Not Started
+## Status: In Progress
+
+## Reviewer findings folded (2026-05-17)
+
+`Agents/Review-reports/h5-race-detail-qol-review.md` (verdict
+APPROVE-WITH-CHANGES, 2 MAJOR / 5 MINOR / 2 NIT) — load-bearing
+changes absorbed below before Phase B/C/D implementation:
+
+- **MAJOR #1 — iOS Safari context-menu suppression.** Every chip
+  `<button>` in `LapChart` AND `CompareDriversSection` adds
+  `onContextMenu={(e) => e.preventDefault()}` plus
+  `className="… touch-none"` so the 500ms long-press isolate gesture
+  does not collide with Safari's system context menu / text-selection
+  popover at exactly the same threshold. Documented with a
+  load-bearing code comment so a future maintainer does not strip the
+  preventDefault as dead code.
+
+- **MAJOR #2 — Drop the URL-sync `useEffect`.** `CompareDriversSection`
+  no longer mirrors `selected → URL` via effect (the effect fires on
+  mount with empty selection and clobbers any unrelated query param).
+  Instead, the toggle callback calls
+  `router.replace(buildUrl(next), { scroll: false })` synchronously in
+  the same tick as the `setSelected` update. Initial state is still
+  read from `useSearchParams` on first render; no effect needed to
+  mirror it back.
+
+- **MINOR #3 — Y-axis rescale-on-toggle-back acknowledged.** The
+  `lapChartClipMaxY` call site filters the input array by the visible
+  driver set, so the Y axis recomputes whenever the visible set
+  changes (including on toggle-back). Documented inline. Signature of
+  `lapChartClipMaxY` itself is preserved — the filtering happens at
+  the call site so `tests/unit/lap-chart-clip.test.ts` continues to
+  pin the function's contract unchanged.
+
+- **MINOR #5 — LIKE metacharacter escaping in `searchPlayers`.**
+  Discord handles can legitimately contain `_`; `%` and `_` are
+  escaped before constructing the LIKE pattern, and the SQL uses
+  `ESCAPE '\'`. Test case added: `searchPlayers(db, 'user_name')`
+  matches only literal `user_name`, not `userXname`.
+
+- **MINOR #6 — `CompareDriversSection` test seam.** Definitive seam
+  is the `initialSelected?: string[]` prop (marked `@internal`) for
+  vitest-only state injection. `useRouter` + `useSearchParams` are
+  also mocked at the test boundary so the URL-write assertion can
+  observe `router.replace` calls deterministically. No
+  `data-testid` hacks.
+
+- **CQ4 — Sync URL replace in toggle callback.** Folded into MAJOR #2.
+
+- **CQ5 — Hide compare section when `< 2` drivers.**
+  `CompareDriversSection` returns `null` immediately when
+  `drivers.length < 2`. No "Pick 2-3 drivers" hint for 1-driver races
+  (DNS / no-show edge cases).
+
+- **MINOR #4 / NIT #8 / NIT #9** — documentation gap (file table
+  already covers `/api/players/search/route.ts` in the second
+  mini-table) / confirming patterns; no code change beyond the inline
+  comments above.
+
+Symbol update: still no (CQ1). Wizard: still no (Q-H5-13). Migration:
+still no (Q-H5-12).
 
 > Four small quality-of-life improvements to the RC racing surface
 > that R1 shipped and H2/H3/H4 hardened. None of them touch the schema
