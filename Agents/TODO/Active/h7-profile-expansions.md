@@ -1,7 +1,42 @@
 # H7 — Profile expansions: game categories + RC win/loss
 
 ## Author: claude-opus-4.7-h7-implementer
-## Status: Not Started
+## Status: In Progress
+
+## Reviewer findings folded (2026-05-18)
+
+The reviewer report (`Agents/Review-reports/h7-profile-expansions-review.md`,
+APPROVE-WITH-CHANGES, claude-sonnet-4-6-h7-reviewer) surfaced two MAJOR + three
+MINOR + two NIT findings. Folded as follows:
+
+- **MAJOR #1 — Test 5 arithmetic.** Original draft pasted `21200` (Flow 1's
+  three-game numerator) into the two-game test 5 fixture. Correct math:
+  `1300×10 + 1500×4 = 19000`; `ROUND(19000/14) = 1357`. Test asserts `1357`.
+- **MAJOR #2 — Career stats markup.** The planned `<dl>` + `grid-cols-4`
+  wraps 5 children into a broken layout. Phase E now renders a `<table>`
+  with `<thead>` / `<tbody>` instead. Semantically correct for tabular data.
+- **MINOR #5 — POST auth status code.** Existing `POST /api/games`
+  returns `403` for unauthenticated callers because `canCreateGame(null)`
+  is false. Added the `player ? 403 : 401` branch to the POST handler in
+  Phase C so the new PATCH and existing POST agree on auth-vs-forbidden
+  semantics.
+- **CQ4 cross-reference.** Added comments between `playerCategoryRatings`
+  and `playerGameRatings` documenting the intentional zero-match asymmetry.
+- **MINOR #3 / #4** (split rounding between SQL `ROUND` and JS
+  `Math.round`): keeping SQL `ROUND` for the rollup. The tests pin the
+  specific SQLite banker-rounding behavior with an explicit fixture
+  (test 7: `current_rating = 1350.5, games_played = 1 → 1350`). The
+  per-game list separately runs through `Math.round` in the JSX. The
+  pages where these two values appear are different sections of the
+  profile so the rare half-tie won't sit side-by-side; the test pins
+  the contract.
+- **NIT #6 / #7** absorbed as inline notes — use `reduce` for
+  `groupByCategory`, accept the existing `resp.text().catch(...)` error
+  pattern.
+
+The CQ positions (CQ1 default `'other'`, CQ2 `z.enum`, CQ3 rating DESC,
+CQ4 asymmetric zero-match, CQ5 `<table>`, CQ6 `game_categories_count`,
+CQ7 no UPDATE backfill) are all locked.
 
 > **Author/Reviewer separation note.** Prior implementers are
 > `claude-opus-4.7-{planner,m2,m3,m4,m5,h1,r1,h2,h3,h4,h5,h6}-implementer`;
@@ -207,6 +242,23 @@ body: JSON.stringify({
 ```
 
 ### `POST /api/games`
+
+Two changes:
+
+1. Body schema gains an optional `category` (below).
+2. Auth check moves from a single `403` to `player ? 403 : 401` (reviewer
+   MINOR #5). The current handler returns `403` for both unauthenticated
+   and unauthorized callers because `canCreateGame(null)` is `false`.
+   With H7's new PATCH handler doing the right thing, both methods on
+   `/api/games` now agree.
+
+```ts
+const session = await auth();
+const player = session?.user ? { id: session.user.id, role: session.user.role } : null;
+if (!canCreateGame(player)) {
+  return NextResponse.json({ error: 'forbidden' }, { status: player ? 403 : 401 });
+}
+```
 
 Body schema gains an optional `category`:
 
@@ -602,32 +654,45 @@ const winLoss = driverWinLossStats(handle, driver.id);
 // ...
 <section className="mt-6">
   <h2 className="text-lg font-medium">Career stats</h2>
-  <dl className="mt-2 grid grid-cols-4 gap-2 text-xs">
-    <div className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1">
-      <dt className="text-slate-500">Kind</dt>
-      <dt className="text-slate-500">Races</dt>
-      <dt className="text-slate-500">Wins</dt>
-      <dt className="text-slate-500">Podiums</dt>
-    </div>
-    {winLoss.map((row) => (
-      <div
-        key={row.raceKind}
-        className="rounded-md border border-slate-800 bg-slate-900 px-2 py-1"
-      >
-        <dt className="text-slate-400">{row.raceKind}</dt>
-        <dd className="font-mono tabular-nums">{row.totalRaces}</dd>
-        <dd className="font-mono tabular-nums">{row.wins}</dd>
-        <dd className="font-mono tabular-nums">{row.podiums}</dd>
-      </div>
-    ))}
-  </dl>
+  <table className="mt-2 w-full border-separate border-spacing-y-1 text-xs">
+    <thead>
+      <tr className="text-slate-500">
+        <th className="text-left font-normal">Kind</th>
+        <th className="text-right font-normal">Races</th>
+        <th className="text-right font-normal">Wins</th>
+        <th className="text-right font-normal">Podiums</th>
+      </tr>
+    </thead>
+    <tbody>
+      {winLoss.map((row) => (
+        <tr
+          key={row.raceKind}
+          className="rounded-md border border-slate-800 bg-slate-900"
+        >
+          <td className="rounded-l-md border-y border-l border-slate-800 bg-slate-900 px-2 py-1 text-slate-400">
+            {row.raceKind}
+          </td>
+          <td className="border-y border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+            {row.totalRaces}
+          </td>
+          <td className="border-y border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+            {row.wins}
+          </td>
+          <td className="rounded-r-md border-y border-r border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+            {row.podiums}
+          </td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
 </section>
 ```
 
-(Implementer may swap the `<dl>` for a `<table>` if the grid pattern
-doesn't render cleanly across 320px–414px viewports — the spec
-ALLOWS `<dl>` per the prompt but the table shape is fine if it's
-clearer. The H5 stat-grid aesthetic is the reference.)
+Reviewer (CQ5 / MAJOR #2) pushed the `<dl>` + `grid-cols-4` shape to
+`<table>`. With 5 children (1 header div + 4 data rows) in a 4-column
+grid, the `all` totals row wrapped to row 2 column 1 — visually broken.
+`<table>` with `<thead>/<tbody>` handles 4 data rows correctly by
+design and is semantically appropriate for tabular data.
 
 ---
 
@@ -724,13 +789,16 @@ Vitest, ephemeral SQLite per test file. Target ~16–20 new tests.
 `tests/unit/queries.test.ts` (edit, +5):
 
 5. `playerCategoryRatings`: 2 racing games (1300×10g + 1500×4g) →
-   one row with rating = `CAST(ROUND(21200/14) AS INTEGER) = 1514`.
+   one row with rating = `CAST(ROUND(19000/14) AS INTEGER) = 1357`.
+   (Reviewer-corrected — original draft pasted Flow 1's `21200` numerator
+   from the three-game fixture into this two-game one. Correct: `1300×10
+   + 1500×4 = 19000`, `19000/14 ≈ 1357.14`, ROUND → 1357.)
 6. `playerCategoryRatings`: zero-match game excluded — rating row
    with `games_played = 0` does not appear in any category rollup.
-7. `playerCategoryRatings`: rounding ties — SQLite's banker's
-   rounding for `.5` produces a deterministic integer. Pin the
-   exact value the implementation returns (document the rounding
-   mode in the test name).
+7. `playerCategoryRatings`: rounding ties — fixture
+   `current_rating = 1350.5, games_played = 1`. SQLite `ROUND(1350.5)`
+   is banker's even → `1350` (not `1351`). Test name documents the
+   rounding mode explicitly.
 8. `playerCategoryRatings`: ORDER BY rating DESC — three categories
    with ratings 1100, 1400, 1300 → returned in 1400, 1300, 1100
    order.
