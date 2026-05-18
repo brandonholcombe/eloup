@@ -28,14 +28,50 @@ export function RaceAdminPanel({
   raceName: string | null;
   raceKind: string;
 }) {
+  const activePenalties = drivers.filter((d) => d.penaltyMs > 0).length;
   return (
-    <section className="mt-6 rounded-md border border-slate-700 bg-slate-900/60 p-3">
-      <h2 className="text-lg font-medium">Admin</h2>
-      <p className="text-xs text-slate-400">Global admins can re-assign the track and apply penalties.</p>
-      <TrackChangeForm raceId={raceId} currentTrackId={currentTrackId} tracks={tracks} />
-      <PenaltyTable raceId={raceId} drivers={drivers} />
-      <DangerZone raceId={raceId} confirmString={raceName ?? raceKind} />
-    </section>
+    <details className="mt-6 rounded-md border border-slate-700 bg-slate-900/60">
+      <summary className="cursor-pointer px-3 py-2 text-lg font-medium">
+        Admin
+        <span className="ml-2 text-xs font-normal text-slate-400">
+          track · penalties{activePenalties > 0 ? ` (${activePenalties})` : ''} · delete
+        </span>
+      </summary>
+      <div className="space-y-3 px-3 pb-3">
+        <p className="text-xs text-slate-400">
+          Global admins can re-assign the track and apply penalties.
+        </p>
+        <details className="rounded border border-slate-800 bg-slate-900/40">
+          <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium">
+            Change track
+          </summary>
+          <div className="px-2 pb-2">
+            <TrackChangeForm raceId={raceId} currentTrackId={currentTrackId} tracks={tracks} />
+          </div>
+        </details>
+        <details className="rounded border border-slate-800 bg-slate-900/40">
+          <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium">
+            Apply penalty
+            {activePenalties > 0 && (
+              <span className="ml-2 text-xs font-normal text-amber-400">
+                {activePenalties} active
+              </span>
+            )}
+          </summary>
+          <div className="px-2 pb-2">
+            <PenaltyTable raceId={raceId} drivers={drivers} />
+          </div>
+        </details>
+        <details className="rounded border border-red-900/40 bg-red-950/20">
+          <summary className="cursor-pointer px-2 py-1.5 text-sm font-medium text-red-300">
+            Danger zone
+          </summary>
+          <div className="px-2 pb-2">
+            <DangerZone raceId={raceId} confirmString={raceName ?? raceKind} />
+          </div>
+        </details>
+      </div>
+    </details>
   );
 }
 
