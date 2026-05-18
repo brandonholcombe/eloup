@@ -6,6 +6,7 @@ import { getRace, lapsForRace, listTracks, standingsForRace } from '@/lib/db/rc'
 import { LapChart, type LapChartDriver } from '@/components/LapChart';
 import { RaceAdminPanel } from '@/components/RaceAdminPanel';
 import { driverColor } from '@/lib/rc/colors';
+import { formatRecordedDate } from '@/lib/rc/datetime';
 import { formatLapMs } from '@/lib/rc/format';
 import { DEFAULT_OUTLIER_MULTIPLIER, isLapOutlier } from '@/lib/rc/outliers';
 import { computeDriverStats, type DriverStats } from '@/lib/rc/stats';
@@ -66,7 +67,7 @@ export default async function RaceDetailPage({
         <span className="text-slate-500">·</span>
         <span className="uppercase tracking-wide text-slate-500">{race.race_kind}</span>
         <span className="text-slate-500">·</span>
-        <time className="font-mono">{formatDateTime(race.race_started_at)}</time>
+        <time className="font-mono">{formatRecordedDate(race.race_started_at)}</time>
       </div>
 
       <section className="mt-4">
@@ -260,16 +261,4 @@ function DriverStatGrid({ stats }: { stats: DriverStats }) {
 
 function optional(ms: number | null): string {
   return ms == null ? '—' : formatLapMs(ms);
-}
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }

@@ -7,6 +7,7 @@ import {
   recentRacesForDriver,
 } from '@/lib/db/rc';
 import { driverColor } from '@/lib/rc/colors';
+import { formatRecordedDateOnly } from '@/lib/rc/datetime';
 import { formatLapMs } from '@/lib/rc/format';
 
 export const dynamic = 'force-dynamic';
@@ -96,7 +97,7 @@ export default async function DriverProfilePage({
                   <div className="mt-1 flex flex-wrap items-center gap-x-2 text-xs text-slate-400">
                     <span>{r.track_name}</span>
                     <span className="text-slate-600">·</span>
-                    <time>{formatDate(r.race_started_at)}</time>
+                    <time>{formatRecordedDateOnly(r.race_started_at)}</time>
                     {r.best_lap_ms != null && (
                       <>
                         <span className="text-slate-600">·</span>
@@ -112,10 +113,4 @@ export default async function DriverProfilePage({
       </section>
     </main>
   );
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString();
 }

@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/db/client';
 import { bestLapsForTrack, getTrackBySlug } from '@/lib/db/rc';
 import { driverColor } from '@/lib/rc/colors';
+import { formatRecordedDateOnly } from '@/lib/rc/datetime';
 import { formatLapMs } from '@/lib/rc/format';
 
 export const dynamic = 'force-dynamic';
@@ -54,7 +55,7 @@ export default async function TrackLeaderboardPage({
                 href={`/racing/${b.race_id}`}
                 className="font-mono text-xs text-slate-400 hover:text-slate-200"
               >
-                {b.race_name ?? formatDate(b.race_started_at)}
+                {b.race_name ?? formatRecordedDateOnly(b.race_started_at)}
               </Link>
               <span className="font-mono text-sm tabular-nums">{formatLapMs(b.lap_time_ms)}</span>
             </li>
@@ -63,10 +64,4 @@ export default async function TrackLeaderboardPage({
       )}
     </main>
   );
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString();
 }

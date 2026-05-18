@@ -3,6 +3,7 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { getTrackBySlug, listRaces, listTracks } from '@/lib/db/rc';
 import { canUploadRaceResults } from '@/lib/permissions';
+import { formatRecordedDate } from '@/lib/rc/datetime';
 import { TrackFilter } from '@/components/TrackFilter';
 
 export const dynamic = 'force-dynamic';
@@ -77,7 +78,7 @@ export default async function RacingIndexPage({
                     {r.race_name ?? r.race_kind}
                   </span>
                   <time className="font-mono text-xs text-slate-400">
-                    {formatDate(r.race_started_at)}
+                    {formatRecordedDate(r.race_started_at)}
                   </time>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
@@ -100,16 +101,4 @@ export default async function RacingIndexPage({
       )}
     </main>
   );
-}
-
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
 }
