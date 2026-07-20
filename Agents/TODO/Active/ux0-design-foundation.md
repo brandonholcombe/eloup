@@ -1,7 +1,31 @@
 # UX0 — Design foundation: shadcn scaffold + tokenized dark theme
 
 ## Author: claude-opus-4.8-ux0-implementer
-## Status: Not Started
+## Status: In Progress
+
+## Reviewer findings folded (2026-07-19)
+
+Independent review at `Agents/Review-reports/ux0-design-foundation-review.md`
+(Reviewer: `claude-opus-4.8-ux0-reviewer`) returned **Request-changes** — 2
+blocking, 3 should-fix, 2 optional. Scaffold shape, HSL math, symbol/doc targets,
+S2, lock regen, and test-safety were all verified correct. The corrections are
+folded into the steps below:
+- **BLOCKING-1:** the new-york Button imports `@radix-ui/react-slot`, which was
+  missing from the install list → build would fail. Added to Step 1.
+- **BLOCKING-2:** the two migrated buttons have **different** looks and the
+  proposed indigo `--primary` would change NewGameForm's submit blue→indigo,
+  breaking pixel-stability. `--primary` is now **blue-500 `217 91% 60%`**;
+  sign-in maps to the **`ghost`** variant, submit to **`default`** — variant per
+  button stated explicitly in Step 4.
+- **SHOULD-FIX-1:** `color-scheme: dark` visibly changes native `<select>`/number
+  inputs + scrollbars → **deferred out of Phase 0** (to Phase 2/5 with intended
+  form-control styling) to keep Phase 0 pixel-stable.
+- **SHOULD-FIX-2:** shadcn `default` size is `h-10` (40px), regressing H8's 44px
+  → Step 4 pins the migrated submit to `h-tap w-full` explicitly.
+- **SHOULD-FIX-3:** `docs/app.md:14` is stale in **two** cells (the Pick label
+  AND the Why prose) — both updated in Step 5.
+- **OPTIONAL-1/2:** Button stays a plain (no `'use client'`) forwardRef; the
+  ~10KB bundle delta lands on the `/games` first-load — both noted.
 
 ## Parent
 
@@ -50,9 +74,12 @@ token layer is in place for Phase 1 to build on.
     return twMerge(clsx(inputs));
   }
   ```
-- Add deps: `lucide-react`, `class-variance-authority`, `tailwind-merge`,
-  `clsx`, `tailwindcss-animate`. (Lucide isn't used until Phase 1 but installing
-  it now keeps the scaffold in one commit; do not import it yet.)
+- Add deps: `@radix-ui/react-slot` (**BLOCKING-1** — the new-york Button imports
+  `Slot` for `asChild`; without it `pnpm build` fails), `lucide-react`,
+  `class-variance-authority`, `tailwind-merge`, `clsx`, `tailwindcss-animate`.
+  (Lucide isn't used until Phase 1 but installing it now keeps the scaffold in
+  one commit; do not import it yet.) The S5 React-19 peer override, if any,
+  applies to `@radix-ui/react-slot`.
 - **⚠️ S5 — install friction:** React 19 under pnpm 10 (strict peers). If
   `pnpm install` warns/fails on a Radix `react: ^18` peer (via
   `@radix-ui/react-slot` pulled by Button), pin React-19-compatible versions and
@@ -75,7 +102,7 @@ each hex→HSL against Tailwind's actual `slate` values; space-separated HSL, no
 | `--muted-foreground` | **slate-500** `#64748b` | `215 16% 47%` |
 | `--border` / `--input` | slate-800 `#1e293b` | `217 33% 17%` |
 | `--secondary` / `--accent` | slate-800 | `217 33% 17%` |
-| `--primary` | implementer's accent (default indigo-ish, consistent with `themeColor #0f172a`) | e.g. `239 84% 67%` |
+| `--primary` | **blue-500 `#3b82f6`** (matches NewGameForm's current `bg-blue-500` — BLOCKING-2; do NOT use indigo, it would shift the submit blue→indigo) | `217 91% 60%` |
 | `--primary-foreground` | near-white | `210 40% 98%` |
 | `--destructive` | red-ish | `0 62% 45%` |
 | `--ring` | matches `--primary` or slate-400 | — |
@@ -88,6 +115,12 @@ each hex→HSL against Tailwind's actual `slate` values; space-separated HSL, no
   the token.
 - Dark-only: apply the vars directly on `:root` (no `.dark`-class toggle needed
   for rendering); shadcn components read the semantic classes regardless.
+- **⚠️ SHOULD-FIX-1 — do NOT set `color-scheme: dark` in Phase 0.** The layout
+  sets no `color-scheme` today, so native `<select>`/`<input type=number>`
+  dropdowns, spinners, and scrollbars render light; adding it would visibly flip
+  them (esp. on `/games` NewGameForm) — a real change that breaks pixel-stability.
+  Defer `color-scheme: dark` to a later phase (2/5) alongside intended
+  form-control styling.
 
 ### 3. `tailwind.config.ts`
 - Add `darkMode: ["class"]` (**O3** — enables a future light theme as a flip, not
@@ -105,26 +138,38 @@ each hex→HSL against Tailwind's actual `slate` values; space-separated HSL, no
 - Do NOT restyle existing text: only add a type scale if it leaves current
   rendering unchanged (safer to skip in Phase 0).
 
-### 4. Proof migration — ONE Button
+### 4. Proof migration — ONE Button (variant per button, BLOCKING-2)
 - Generate the shadcn `Button` into `components/ui/button.tsx` (CVA variants:
-  default/secondary/outline/ghost/destructive; sizes: default/sm/lg/icon). Theme
-  the `default` variant to match the app's current button look (so no visible
-  change), and ensure it satisfies the H8 44px tap-target minimum.
-- Replace buttons on ONE small surface to exercise the pipeline: the sign-in
-  button in `components/BottomNav.tsx` **and** the submit in
-  `components/NewGameForm.tsx`. Keep labels/behavior identical; the sign-in form
-  still uses its inline `'use server'` action (the Button is just the trigger).
+  default/secondary/outline/ghost/destructive; sizes: default/sm/lg/icon). With
+  `--primary` = blue-500, the `default` variant (`bg-primary`) reproduces
+  NewGameForm's current `bg-blue-500` fill.
+- **⚠️ OPTIONAL-1 — keep `button.tsx` a plain (no `'use client'`) forwardRef
+  component** (the canonical shadcn Button is exactly that). BottomNav is a
+  server component; adding `'use client'` to the Button would be unnecessary and
+  risks the server-action boundary. No ref/handler is passed here.
+- Replace exactly two buttons, each mapped to the **correct variant** so the look
+  is unchanged:
+  - `components/NewGameForm.tsx` submit (currently solid `bg-blue-500 text-white
+    h-tap w-full`) → `<Button>` **`default`** variant, **pinned to `h-tap w-full`
+    via `className`** (SHOULD-FIX-2 — shadcn `default` size is `h-10`/40px, which
+    would regress the H8 44px target and drop full-width).
+  - `components/BottomNav.tsx` sign-in (currently backgroundless `flex-col
+    text-xs text-slate-300 hover:text-white`) → `<Button variant="ghost">` plus
+    its existing `flex-col text-xs text-slate-300 hover:text-white h-tap
+    min-w-tap w-full` via `className`. The form still uses its inline
+    `'use server'` action; the Button is just the trigger.
 - Do NOT migrate any other buttons (Phase 1).
 
 ### 5. Symbol + docs + lock (one commit)
 - `symbols/manifest.json`: set `app.properties.ui_lib` →
   `tailwind_shadcn`.
-- **⚠️ S1 — edit BOTH stale strings:** (a) the `app.description` prose in
-  `symbols/manifest.json` (currently "Tailwind + hand-written components (no
-  shadcn-CLI dependency)") and (b) the different wording in `docs/app.md:14`
-  ("Originally planned shadcn/ui; settled on hand-written Tailwind…"). Both must
-  now reflect shadcn/ui adoption. Record Q-APP-3 resolved (→ shadcn/ui) in
-  `docs/app.md`.
+- **⚠️ S1 + SHOULD-FIX-3 — edit THREE stale strings:** (a) the `app.description`
+  prose in `symbols/manifest.json` (currently "Tailwind + hand-written components
+  (no shadcn-CLI dependency)"); and on `docs/app.md:14` BOTH (b) the Pick-column
+  label cell "Tailwind + hand-written components" AND (c) the Why prose
+  "Originally planned shadcn/ui; settled on hand-written Tailwind…". All three
+  must now reflect shadcn/ui adoption, or the docs are internally contradictory
+  after the flip. Record Q-APP-3 resolved (→ shadcn/ui) in `docs/app.md`.
 - Run `python scripts/align.py lock`; commit `manifest.json` + `manifest.lock` +
   `docs/app.md` + all code together.
 - **⚠️ S2 — `align.py` does NOT hash symbol descriptions.** `align.py check`
@@ -140,12 +185,16 @@ each hex→HSL against Tailwind's actual `slate` values; space-separated HSL, no
   manifest/sw; unit tests assert text/structure, not button markup or slate
   classes).
 - `pnpm build`: first-load JS must stay within budget — H8 baseline 100–114KB,
-  ≤150KB ceiling. Report the delta from adding CVA/tailwind-merge + the Button.
+  ≤150KB ceiling. Report the delta from adding CVA/tailwind-merge/react-slot +
+  the Button. **(OPTIONAL-2):** the delta (~10KB) lands on the `/games`
+  (NewGameForm, a client component) first-load, not universally — call it out
+  specifically, not just app-wide.
 - `python scripts/align.py check` → OK, **plus a manual read of
   `app.description`** (S2 — the check can't see it).
-- Manual 390px smoke: the app is visually identical except the one migrated
-  Button; the sign-in and New Game buttons still work; no regression in the
-  bottom nav / safe-area padding.
+- Manual 390px smoke: the app is visually identical (color-scheme deferred, so
+  native form controls are unchanged too); the sign-in and New Game buttons look
+  and work exactly as before (blue solid submit, backgroundless ghost sign-in);
+  no regression in the bottom nav / safe-area padding / 44px targets.
 
 ## Review gate
 
