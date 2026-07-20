@@ -8,6 +8,9 @@ const config: Config = {
         'safe-bottom': 'env(safe-area-inset-bottom)',
         'safe-top': 'env(safe-area-inset-top)',
       },
+      height: {
+        tap: '44px',
+      },
       minHeight: {
         tap: '44px',
       },

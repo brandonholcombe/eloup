@@ -39,7 +39,10 @@ export default async function TournamentDetailPage({
 
   return (
     <main className="p-4">
-      <header className="flex items-baseline justify-between gap-2">
+      <Link href="/tournaments" className="text-sm text-slate-400 hover:text-slate-200">
+        ← Tournaments
+      </Link>
+      <header className="mt-2 flex items-baseline justify-between gap-2">
         <h1 className="truncate text-2xl font-semibold">{tournament.name}</h1>
         <span className="whitespace-nowrap text-xs text-slate-500">
           {members.length} member{members.length === 1 ? '' : 's'}

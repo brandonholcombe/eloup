@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { ConfirmRowButton } from '@/components/ConfirmRowButton';
@@ -54,7 +55,10 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
 
   return (
     <main className="p-4">
-      <header>
+      <Link href="/matches" className="text-sm text-slate-400 hover:text-slate-200">
+        ← Matches
+      </Link>
+      <header className="mt-2">
         <h1 className="text-xl font-semibold">{match.game_name}</h1>
         <p className="text-sm text-slate-400">Status: {match.status}</p>
       </header>

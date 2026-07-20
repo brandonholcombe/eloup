@@ -1,11 +1,7 @@
-import Link from 'next/link';
 import { auth, signIn } from '@/lib/auth';
+import { BottomNavItems, type NavItem } from '@/components/BottomNavItems';
 
-const ITEMS: {
-  href: '/leaderboards' | '/racing' | '/matches' | '/tournaments' | '/profile';
-  label: string;
-  icon: string;
-}[] = [
+const ITEMS: NavItem[] = [
   { href: '/leaderboards', label: 'Boards', icon: '🏆' },
   { href: '/racing', label: 'Racing', icon: '🏎️' },
   { href: '/matches', label: 'Matches', icon: '🎲' },
@@ -13,22 +9,27 @@ const ITEMS: {
   { href: '/profile', label: 'Me', icon: '👤' },
 ];
 
-async function SignInButton() {
+// Stays a server component so its inline 'use server' action is valid. Rendered
+// into the client BottomNavItems via composition (children slot) so it remains
+// inside the flex <ul> layout without crossing into the client boundary.
+function SignInButton() {
   return (
-    <form
-      action={async () => {
-        'use server';
-        await signIn('discord', { redirectTo: '/leaderboards' });
-      }}
-    >
-      <button
-        type="submit"
-        className="flex h-tap min-w-tap flex-col items-center justify-center gap-0.5 text-xs text-slate-300 hover:text-white"
+    <li className="flex-1">
+      <form
+        action={async () => {
+          'use server';
+          await signIn('discord', { redirectTo: '/leaderboards' });
+        }}
       >
-        <span aria-hidden className="text-lg">🔑</span>
-        Sign in
-      </button>
-    </form>
+        <button
+          type="submit"
+          className="flex h-tap min-w-tap w-full flex-col items-center justify-center gap-0.5 text-xs text-slate-300 hover:text-white"
+        >
+          <span aria-hidden className="text-lg">🔑</span>
+          Sign in
+        </button>
+      </form>
+    </li>
   );
 }
 
@@ -41,26 +42,9 @@ export async function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur"
       style={{ paddingBottom: 'var(--safe-bottom, 0px)' }}
     >
-      <ul className="mx-auto flex max-w-md items-stretch justify-around gap-1 px-2 py-2">
-        {ITEMS.map((it) => (
-          <li key={it.href} className="flex-1">
-            <Link
-              href={it.href}
-              className="flex h-tap min-w-tap flex-col items-center justify-center gap-0.5 rounded-md text-xs text-slate-300 hover:text-white"
-            >
-              <span aria-hidden className="text-lg">
-                {it.icon}
-              </span>
-              {it.label}
-            </Link>
-          </li>
-        ))}
-        {!signedIn && (
-          <li className="flex-1">
-            <SignInButton />
-          </li>
-        )}
-      </ul>
+      <BottomNavItems items={ITEMS}>
+        {!signedIn && <SignInButton />}
+      </BottomNavItems>
     </nav>
   );
 }

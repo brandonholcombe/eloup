@@ -23,7 +23,7 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className="min-h-screen bg-slate-950 pb-24 text-slate-100">
+      <body className="min-h-screen bg-slate-950 pb-[calc(6rem+env(safe-area-inset-bottom))] text-slate-100">
         <header
           className="sticky top-0 z-40 border-b border-slate-800 bg-slate-950/95 backdrop-blur"
           style={{ paddingTop: 'var(--safe-top, 0px)' }}
