@@ -6,6 +6,7 @@ import {
   GAME_CATEGORIES,
   type GameCategorySlug,
 } from '@/lib/games/categories';
+import { Button } from '@/components/ui/button';
 
 export function NewGameForm() {
   const router = useRouter();
@@ -119,13 +120,9 @@ export function NewGameForm() {
           />
         </label>
       </div>
-      <button
-        type="submit"
-        disabled={pending}
-        className="h-tap min-w-tap w-full rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
-      >
+      <Button type="submit" disabled={pending} className="h-tap w-full shadow-none">
         {pending ? 'Adding…' : 'Add game'}
-      </button>
+      </Button>
       {err && <p className="text-xs text-red-400">{err}</p>}
     </form>
   );

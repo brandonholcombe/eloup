@@ -1,7 +1,48 @@
 # UX0 — Design foundation: shadcn scaffold + tokenized dark theme
 
 ## Author: claude-opus-4.8-ux0-implementer
-## Status: In Progress
+## Status: Complete
+
+## Implementation outcome (2026-07-19)
+
+Phase 0 implemented; all reviewer BLOCKING/SHOULD-FIX items honored; pixel-stable.
+
+- **Deps:** `@radix-ui/react-slot`, `lucide-react`, `class-variance-authority`,
+  `tailwind-merge`, `clsx`, `tailwindcss-animate` added. S5 friction did NOT
+  materialize — `@radix-ui/react-slot@1.3.0` supports React 19; the only peer
+  warning is the pre-existing next/react-rc one. No `pnpm.overrides` needed.
+- **Scaffold:** `components.json` (new-york), `lib/utils.ts` (`cn`),
+  `components/ui/button.tsx` (canonical shadcn Button — plain forwardRef, no
+  `'use client'`, OPTIONAL-1).
+- **Tokens (`globals.css`):** dark-only HSL vars on `:root`; `--primary` =
+  blue-500 `217 91% 60%` (BLOCKING-2), `--muted-foreground` = slate-500 (S3),
+  `--radius` = 0.375rem. **No `color-scheme: dark`** (SHOULD-FIX-1) — verified 0
+  occurrences in built CSS, so native controls are unchanged. Did NOT add the
+  shadcn `* border-border` / `body bg-background` base rules (would have shifted
+  literal-class elements); vars are purely additive.
+- **`tailwind.config.ts`:** `darkMode: ["class"]` (O3), CSS-var colors,
+  `borderRadius` off `--radius`, `tailwindcss-animate` plugin; H8
+  `height/minHeight/minWidth.tap` + safe-area spacing preserved (verified
+  `.h-tap{height:44px}` still emitted).
+- **Migration (BLOCKING-2, SHOULD-FIX-2):** `NewGameForm` submit →
+  `<Button>` default (`className="h-tap w-full shadow-none"` — pins 44px +
+  full-width, neutralizes the added shadow; `bg-primary` = blue-500 so no color
+  shift). `BottomNav` sign-in → `<Button variant="ghost">` with
+  `hover:bg-transparent` to stay backgroundless like before.
+- **Symbol/docs (S1/S2/SHOULD-FIX-3):** `app.ui_lib` → `tailwind_shadcn`;
+  `app.description` prose rewritten; `docs/app.md:14` both cells updated + Q-APP-3
+  recorded resolved→shadcn; `align.py lock` regenerated (root `a2ef7d6b…`,
+  aligned). **S2 manual read done** — description no longer says
+  "hand-written / no shadcn" (the check can't see it).
+
+**Gates:** `pnpm lint` clean · `pnpm typecheck` exit 0 · `pnpm test` **308
+passing** (unchanged) · `pnpm build` clean · `align.py check` OK. First-load JS:
+`/games` 102→**112KB** (~10KB from cva/tailwind-merge/slot/Button on the one
+client route, as predicted OPTIONAL-2), **shared 100KB unchanged**, leaderboards
+109KB unchanged — all under the 150KB ceiling. App is visually identical.
+
+**Next:** Phase 1 (`ux1-primitives.md`) — adopt the rest of the shadcn primitives,
+emoji→Lucide, and sweep the 21 duplicated card strings.
 
 ## Reviewer findings folded (2026-07-19)
 

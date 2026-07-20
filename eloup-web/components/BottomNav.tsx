@@ -1,5 +1,6 @@
 import { auth, signIn } from '@/lib/auth';
 import { BottomNavItems, type NavItem } from '@/components/BottomNavItems';
+import { Button } from '@/components/ui/button';
 
 const ITEMS: NavItem[] = [
   { href: '/leaderboards', label: 'Boards', icon: '🏆' },
@@ -21,13 +22,14 @@ function SignInButton() {
           await signIn('discord', { redirectTo: '/leaderboards' });
         }}
       >
-        <button
+        <Button
           type="submit"
-          className="flex h-tap min-w-tap w-full flex-col items-center justify-center gap-0.5 text-xs text-slate-300 hover:text-white"
+          variant="ghost"
+          className="flex h-tap min-w-tap w-full flex-col items-center justify-center gap-0.5 text-xs text-slate-300 hover:bg-transparent hover:text-white"
         >
           <span aria-hidden className="text-lg">🔑</span>
           Sign in
-        </button>
+        </Button>
       </form>
     </li>
   );

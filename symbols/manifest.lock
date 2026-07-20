@@ -1,14 +1,14 @@
 {
-  "root": "adc68177550842bb",
-  "generated": "2026-05-18T07:25:56Z",
+  "root": "a2ef7d6b5e022827",
+  "generated": "2026-07-20T04:30:18Z",
   "status": "aligned",
   "symbols": {
     "app": {
-      "hash": "622593f872ad3542",
-      "means": "app: anonymous_leaderboards=True, auth_lib=authjs_v5, css=tailwind, db_layer=better_sqlite3_direct, e2e_runner=playwright, first_admin_bootstrap=env_discord_id_optional, game_categories_count=8, migration_strategy=sql_files_versioned, next_major=15, next_router=app_router, pwa_strategy=manual_sw, session_strategy=jwt, test_runner=vitest, ui_lib=tailwind_handwritten",
+      "hash": "5edd2902c5b170d3",
+      "means": "app: anonymous_leaderboards=True, auth_lib=authjs_v5, css=tailwind, db_layer=better_sqlite3_direct, e2e_runner=playwright, first_admin_bootstrap=env_discord_id_optional, game_categories_count=8, migration_strategy=sql_files_versioned, next_major=15, next_router=app_router, pwa_strategy=manual_sw, session_strategy=jwt, test_runner=vitest, ui_lib=tailwind_shadcn",
       "docs": {
         "docs/app.md": {
-          "hash": "415d867c08f084e7",
+          "hash": "767b5354ebc8cf3f",
           "status": "current"
         }
       },
