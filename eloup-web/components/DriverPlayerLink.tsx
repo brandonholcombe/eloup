@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { Card } from '@/components/ui/card';
 
 type LinkedPlayer = {
   id: string;
@@ -85,7 +86,7 @@ export function DriverPlayerLink({ driverId, currentLink }: Props) {
     });
 
   return (
-    <div className="mt-3 rounded-md border border-slate-800 bg-slate-900 p-3 text-sm">
+    <Card className="mt-3 p-3 text-sm">
       <p className="text-xs uppercase tracking-wide text-slate-400">
         Admin · link Discord player
       </p>
@@ -139,6 +140,6 @@ export function DriverPlayerLink({ driverId, currentLink }: Props) {
         </>
       )}
       {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
-    </div>
+    </Card>
   );
 }

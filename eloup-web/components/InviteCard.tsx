@@ -20,7 +20,7 @@ export function InviteCard({
   const joinUrl = token ? `${appDomain.replace(/\/$/, '')}/tournaments/join/${token}` : null;
 
   return (
-    <section className="mt-4 rounded-md border border-slate-800 bg-slate-900 p-3">
+    <section className="mt-4 rounded-md border border-border bg-card p-3">
       <h2 className="text-sm font-medium uppercase tracking-wide text-slate-400">Invite link</h2>
       {joinUrl ? (
         <>

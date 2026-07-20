@@ -1,8 +1,9 @@
-// Lightweight loading skeleton primitives for route-level loading.tsx files.
-// Dark-slate theme, animate-pulse, sized to the max-w-md mobile shell.
+// Lightweight loading skeleton composites for route-level loading.tsx files.
+// Built on the shared ui/skeleton primitive; sized to the max-w-md mobile shell.
+import { Skeleton } from '@/components/ui/skeleton';
 
 export function SkeletonBar({ className = '' }: { className?: string }) {
-  return <div className={`animate-pulse rounded bg-slate-800 ${className}`} />;
+  return <Skeleton className={className} />;
 }
 
 export function SkeletonRows({ count = 6 }: { count?: number }) {
@@ -11,7 +12,7 @@ export function SkeletonRows({ count = 6 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <li
           key={i}
-          className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-3"
+          className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-3"
         >
           <SkeletonBar className="h-4 w-1/2" />
           <SkeletonBar className="h-4 w-10" />

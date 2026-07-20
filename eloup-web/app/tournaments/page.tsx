@@ -32,7 +32,7 @@ export default async function TournamentsPage() {
             <li key={t.id}>
               <Link
                 href={`/tournaments/${t.slug}` as never}
-                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-3"
+                className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-3"
               >
                 <span className="truncate">{t.name}</span>
                 {t.ends_at && (

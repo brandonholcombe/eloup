@@ -75,7 +75,7 @@ export default async function TournamentDetailPage({
               <li key={m.id}>
                 <Link
                   href={`/matches/${m.id}` as never}
-                  className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                  className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
                 >
                   <span>{m.game_name}</span>
                   <span className="text-xs text-slate-500">

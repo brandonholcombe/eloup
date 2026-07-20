@@ -60,7 +60,7 @@ function Section({ title, rows, emptyMsg }: { title: string; rows: Row[]; emptyM
             <li key={r.id}>
               <Link
                 href={`/matches/${r.id}` as never}
-                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span>{r.game_name}</span>
                 <span className="text-slate-400">{r.status}</span>

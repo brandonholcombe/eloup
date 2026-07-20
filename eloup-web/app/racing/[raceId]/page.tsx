@@ -258,7 +258,7 @@ export default async function RaceDetailPage({
           const driverLaps = laps.filter((l) => l.driver_id === s.driver_id);
           const stats = statsByDriver.get(s.driver_id)!;
           return (
-            <details key={s.driver_id} className="rounded-md border border-slate-800 bg-slate-900">
+            <details key={s.driver_id} className="rounded-md border border-border bg-card">
               <summary className="flex cursor-pointer items-center gap-2 px-3 py-2 text-sm">
                 <span
                   aria-hidden
@@ -344,7 +344,7 @@ function DriverStatGrid({ stats }: { stats: DriverStats }) {
       {items.map((it) => (
         <div
           key={it.label}
-          className="rounded border border-slate-800 bg-slate-900 px-2 py-1.5"
+          className="rounded border border-border bg-card px-2 py-1.5"
         >
           <dt className="text-[10px] uppercase tracking-wide text-slate-500">{it.label}</dt>
           <dd className="mt-0.5 flex items-baseline gap-1 font-mono tabular-nums text-slate-100">

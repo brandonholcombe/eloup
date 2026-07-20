@@ -80,7 +80,7 @@ export default async function ProfilePage() {
             {categoryRollup.map((c) => (
               <li
                 key={c.category}
-                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span>{c.label}</span>
                 <span className="font-mono tabular-nums">
@@ -107,7 +107,7 @@ export default async function ProfilePage() {
                   {rows.map((r) => (
                     <li
                       key={r.gameId}
-                      className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                      className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
                     >
                       <span>{r.gameName}</span>
                       <span className="font-mono tabular-nums">
@@ -130,7 +130,7 @@ export default async function ProfilePage() {
               <li key={link.href}>
                 <Link
                   href={link.href}
-                  className="flex min-h-tap items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
+                  className="flex min-h-tap items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
                 >
                   <span>{link.label}</span>
                   <span aria-hidden className="text-slate-500">→</span>
@@ -150,7 +150,7 @@ export default async function ProfilePage() {
             {recent.map((r) => (
               <li
                 key={r.match_id}
-                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span>
                   {r.game_name} <span className="text-slate-500">#{r.placement ?? '?'}</span>

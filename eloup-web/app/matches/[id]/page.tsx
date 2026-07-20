@@ -69,7 +69,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
           return (
             <li
               key={r.player_id}
-              className="rounded-md border border-slate-800 bg-slate-900 p-3 text-sm"
+              className="rounded-md border border-border bg-card p-3 text-sm"
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium">

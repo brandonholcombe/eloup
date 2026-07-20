@@ -42,7 +42,7 @@ export default async function LeaderboardsPage({
           {rows.map((r, i) => (
             <li
               key={r.player_id}
-              className="flex items-center gap-3 rounded-md border border-slate-800 bg-slate-900 px-3 py-2"
+              className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
             >
               <span className="w-6 text-right text-slate-500">{i + 1}</span>
               {r.avatar_url ? (

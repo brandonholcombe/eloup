@@ -33,7 +33,7 @@ export default async function GamesPage() {
             {games.map((g) => (
               <li
                 key={g.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span className="inline-flex items-center">
                   {g.name}{' '}

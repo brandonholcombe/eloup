@@ -29,6 +29,37 @@ verified. Corrections folded below:
   Button shadow/`hover:bg-primary/90` shift acknowledged as a minor accepted
   change (or neutralized) — no longer claimed "fully stable."
 
+## Part 1a outcome (2026-07-20) — COMPLETE
+
+Implemented; pixel-stable; committed separately from 1b.
+
+- **Primitives:** `components/ui/card.tsx` (rethemed rounded-md, no shadow, with
+  explicit `border-border` since Phase 0 omitted shadcn's global border base
+  rule) + `components/ui/skeleton.tsx`. `components/Skeleton.tsx` `SkeletonBar`
+  rebuilt on the primitive (8 `loading.tsx` untouched — they import only
+  `PageSkeleton`). **`badge.tsx` deferred to 1b/Phase 2** (no consumer in 1a).
+- **Card sweep — approach changed after a live-tree discovery.** The host-element
+  audit showed **20 of 21 card sites are semantic elements** (`<li>`×11,
+  `<Link>`×4, `<section>`, `<details>`, `<p>`, `<svg>`) — only `DriverPlayerLink`
+  is a plain `<div>`. A `<Card>` (div) swap would break list/nav/landmark
+  semantics; `<Card asChild>` on every row is heavy churn for modest gain and
+  overlaps Phase 2's per-screen rework. **User decision: token-swap in place.**
+  So: replaced literal `border-slate-800 bg-slate-900` → `border-border bg-card`
+  across all 15 card files (pixel-identical — `--card`=slate-900,
+  `--border`=slate-800, verified in built CSS), keeping host elements;
+  `TournamentStandings` near-miss tokenized (active `border-blue-500` kept);
+  `DriverPlayerLink` `<div>` → real `<Card>` as the one component demo.
+  **The actual `<Card>`/`<CardContent>` adoption on rows is folded into Phase 2**
+  (screen redesign), where the markup is reworked anyway.
+- **Left as-is (intentional):** CompareDrivers/LapChart toggle chips (S3 — Phase 2
+  `Toggle`), RaceAdminPanel `bg-slate-900/40` opacity `<details>` (no clean alpha
+  token; Phase 2).
+- **Gates:** lint clean · typecheck exit 0 · vitest 308 passing · build clean ·
+  bundle unchanged (shared 100KB, /games 112KB, leaderboards/profile 109KB).
+
+**Remaining for Part 1b:** button rollout (with chip exclusions + shadow/hover
+reconciliation) + emoji→Lucide nav + `badge.tsx`.
+
 ## Parent
 
 Phase 1 of `ux-overhaul-plan.md`. Builds on Phase 0 (`ux0-design-foundation.md`,

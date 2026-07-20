@@ -63,7 +63,7 @@ export function LapChart({ drivers, visibleDriverIds, onToggle, onIsolate }: Lap
   }
   if (visibleTimes.length === 0) {
     return (
-      <p className="rounded-md border border-slate-800 bg-slate-900 p-4 text-sm text-slate-400">
+      <p className="rounded-md border border-border bg-card p-4 text-sm text-slate-400">
         No lap data for this race.
       </p>
     );
@@ -102,7 +102,7 @@ export function LapChart({ drivers, visibleDriverIds, onToggle, onIsolate }: Lap
         role="img"
         aria-label="Lap-time chart, one line per driver"
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="block w-full rounded-md border border-slate-800 bg-slate-900"
+        className="block w-full rounded-md border border-border bg-card"
       >
         {ticksY.map((t) => (
           <g key={t}>
@@ -209,7 +209,7 @@ function DriverChip({ driver, isVisible, onToggle, onIsolate }: DriverChipProps)
   const baseChip =
     'inline-flex h-tap min-w-tap items-center gap-1 rounded-full border px-2 py-1 text-xs';
   const visibilityClass = isVisible
-    ? 'border-slate-800 bg-slate-900 text-slate-200'
+    ? 'border-border bg-card text-slate-200'
     : 'border-dashed border-slate-700 bg-slate-900 text-slate-200 opacity-40';
 
   if (!interactive) {

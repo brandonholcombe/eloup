@@ -86,16 +86,16 @@ export default async function DriverProfilePage({
           <tbody>
             {winLoss.map((row) => (
               <tr key={row.raceKind}>
-                <td className="rounded-l-md border-y border-l border-slate-800 bg-slate-900 px-2 py-1 text-slate-400">
+                <td className="rounded-l-md border-y border-l border-border bg-card px-2 py-1 text-slate-400">
                   {row.raceKind}
                 </td>
-                <td className="border-y border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+                <td className="border-y border-border bg-card px-2 py-1 text-right font-mono tabular-nums">
                   {row.totalRaces}
                 </td>
-                <td className="border-y border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+                <td className="border-y border-border bg-card px-2 py-1 text-right font-mono tabular-nums">
                   {row.wins}
                 </td>
-                <td className="rounded-r-md border-y border-r border-slate-800 bg-slate-900 px-2 py-1 text-right font-mono tabular-nums">
+                <td className="rounded-r-md border-y border-r border-border bg-card px-2 py-1 text-right font-mono tabular-nums">
                   {row.podiums}
                 </td>
               </tr>
@@ -113,7 +113,7 @@ export default async function DriverProfilePage({
             {bestsPerTrack.map((b) => (
               <li
                 key={b.track_id}
-                className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <Link
                   href={`/racing/tracks/${encodeURIComponent(b.track_slug)}`}
@@ -137,7 +137,7 @@ export default async function DriverProfilePage({
             {recent.map((r) => (
               <li
                 key={r.race_id}
-                className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2 text-sm"
+                className="rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <Link href={`/racing/${r.race_id}`} className="block">
                   <div className="flex items-baseline justify-between">

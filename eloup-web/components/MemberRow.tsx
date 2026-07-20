@@ -33,7 +33,7 @@ export function MemberRow({
   };
 
   return (
-    <li className="rounded-md border border-slate-800 bg-slate-900 px-3 py-2">
+    <li className="rounded-md border border-border bg-card px-3 py-2">
       <div className="flex items-center gap-3">
         {member.avatar_url ? (
           // eslint-disable-next-line @next/next/no-img-element

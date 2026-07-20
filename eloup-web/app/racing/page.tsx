@@ -70,7 +70,7 @@ export default async function RacingIndexPage({
           {races.map((r) => (
             <li
               key={r.id}
-              className="rounded-md border border-slate-800 bg-slate-900 px-3 py-3"
+              className="rounded-md border border-border bg-card px-3 py-3"
             >
               <Link href={`/racing/${r.id}`} className="block">
                 <div className="flex items-baseline justify-between gap-2">
