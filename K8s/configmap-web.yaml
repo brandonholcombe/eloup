@@ -12,3 +12,6 @@ data:
   AUTH_URL: "https://eloup.kodloki.io"
   AUTH_TRUST_HOST: "true"
   ELOUP_BOOTSTRAP_ADMIN_DISCORD_ID: "481702948146249728"
+  # Temporary memory-leak diagnostic (diag-mem-probe.md). Exposes memory
+  # counters on /api/health. Remove this line + roll to disable.
+  DIAG_MEM: "1"
