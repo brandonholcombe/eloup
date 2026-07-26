@@ -1,7 +1,7 @@
 # UX1 — Component primitives: Card/Badge/Skeleton sweep + Button rollout + Lucide nav
 
 ## Author: claude-opus-4.8-ux1-implementer
-## Status: In Progress
+## Status: Complete
 
 ## Reviewer findings folded (2026-07-20)
 
@@ -57,8 +57,35 @@ Implemented; pixel-stable; committed separately from 1b.
 - **Gates:** lint clean · typecheck exit 0 · vitest 308 passing · build clean ·
   bundle unchanged (shared 100KB, /games 112KB, leaderboards/profile 109KB).
 
-**Remaining for Part 1b:** button rollout (with chip exclusions + shadow/hover
-reconciliation) + emoji→Lucide nav + `badge.tsx`.
+## Part 1b outcome (2026-07-26) — COMPLETE (nav done; button rollout → Phase 2)
+
+- **Lucide nav (the one intended visible change) — DONE & verified.** Swapped the
+  6 emoji for Lucide icons: Boards→`Trophy`, Racing→`Car`, Matches→`Dices`,
+  Cups→`Medal`, Me→`User`, Sign in→`LogIn`. Because a Lucide *component* can't
+  cross the RSC boundary as a prop, the nav `ITEMS` (with component icons) moved
+  INTO the client `BottomNavItems`; the server `BottomNav` now passes only the
+  sign-in slot. Icons are 22px, `aria-hidden`, inherit `currentColor` so the H8
+  active-tab color logic still applies. lint/typecheck/build clean; vitest 308
+  passing; `nav-active` survives; leaderboards first-load 109KB (Lucide
+  tree-shaken).
+- **Button rollout — DEFERRED to Phase 2** (same call as the card-component
+  adoption). Analysis: 26 non-chip `<button>`s map to variants as blue→`default`
+  (12), slate-800→`secondary` (8), slate-700→`secondary` (8, minor shade shift),
+  red→`destructive` (2). But every mapping carries a minor appearance change
+  (hover tint normalizes to the variant hover; primary gains a shadow unless
+  neutralized; slate-700→slate-800), so it is NOT pixel-stable — it's a
+  deliberate normalization that wants **visual verification** (the browser MCP is
+  currently unavailable, and a botched blind conversion during this pass
+  confirmed the risk). It also overlaps Phase 2's per-screen button rework. The
+  `<Button>` primitive is already proven (UX0 NewGameForm submit + sign-in), so
+  nothing is blocked. Toggle chips (LapChart/CompareDrivers) stay excluded (S3).
+- **`badge.tsx` — DEFERRED to Phase 2** (no consumer until pills are restyled).
+
+**Phase 1 net:** primitives exist (Button/Card/Skeleton), the app is tokenized
+(border/bg via `border-border`/`bg-card`), skeletons run on the shared primitive,
+and the nav is modernized to Lucide. The bulk `<Card>`/`<Button>` adoption is
+intentionally folded into Phase 2, where each screen is re-laid and changes can
+be seen.
 
 ## Parent
 

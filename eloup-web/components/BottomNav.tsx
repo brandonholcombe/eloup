@@ -1,14 +1,7 @@
+import { LogIn } from 'lucide-react';
 import { auth, signIn } from '@/lib/auth';
-import { BottomNavItems, type NavItem } from '@/components/BottomNavItems';
+import { BottomNavItems } from '@/components/BottomNavItems';
 import { Button } from '@/components/ui/button';
-
-const ITEMS: NavItem[] = [
-  { href: '/leaderboards', label: 'Boards', icon: '🏆' },
-  { href: '/racing', label: 'Racing', icon: '🏎️' },
-  { href: '/matches', label: 'Matches', icon: '🎲' },
-  { href: '/tournaments', label: 'Cups', icon: '🏁' },
-  { href: '/profile', label: 'Me', icon: '👤' },
-];
 
 // Stays a server component so its inline 'use server' action is valid. Rendered
 // into the client BottomNavItems via composition (children slot) so it remains
@@ -27,7 +20,7 @@ function SignInButton() {
           variant="ghost"
           className="flex h-tap min-w-tap w-full flex-col items-center justify-center gap-0.5 text-xs text-slate-300 hover:bg-transparent hover:text-white"
         >
-          <span aria-hidden className="text-lg">🔑</span>
+          <LogIn aria-hidden className="h-[22px] w-[22px]" />
           Sign in
         </Button>
       </form>
@@ -44,9 +37,7 @@ export async function BottomNav() {
       className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-800 bg-slate-950/95 backdrop-blur"
       style={{ paddingBottom: 'var(--safe-bottom, 0px)' }}
     >
-      <BottomNavItems items={ITEMS}>
-        {!signedIn && <SignInButton />}
-      </BottomNavItems>
+      <BottomNavItems>{!signedIn && <SignInButton />}</BottomNavItems>
     </nav>
   );
 }
