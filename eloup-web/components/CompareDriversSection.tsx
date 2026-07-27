@@ -91,7 +91,7 @@ export function CompareDriversSection({ drivers, initialSelected }: Props) {
   return (
     <section className="mt-6">
       <h2 className="text-lg font-medium">Compare drivers</h2>
-      <p className="mt-1 text-xs text-slate-500">
+      <p className="mt-1 text-xs text-muted-foreground">
         Pick 2–3 drivers to compare side-by-side. Tap to toggle.
       </p>
       <ul className="mt-2 flex flex-wrap gap-2">
@@ -127,7 +127,7 @@ export function CompareDriversSection({ drivers, initialSelected }: Props) {
         })}
       </ul>
       {picked.length < 2 ? (
-        <p className="mt-3 text-xs text-slate-500">
+        <p className="mt-3 text-xs text-muted-foreground">
           Select at least 2 drivers above to see the comparison.
         </p>
       ) : (

@@ -83,13 +83,13 @@ export default async function RacingIndexPage({
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
                   <span>{r.track_name}</span>
-                  <span className="text-slate-500">·</span>
-                  <span className="uppercase tracking-wide text-slate-500">{r.race_kind}</span>
-                  <span className="text-slate-500">·</span>
+                  <span className="text-muted-foreground">·</span>
+                  <span className="uppercase tracking-wide text-muted-foreground">{r.race_kind}</span>
+                  <span className="text-muted-foreground">·</span>
                   <span>{r.driver_count} drivers</span>
                   {r.winner_display_name && (
                     <>
-                      <span className="text-slate-500">·</span>
+                      <span className="text-muted-foreground">·</span>
                       <span className="text-emerald-400">🏁 {r.winner_display_name}</span>
                     </>
                   )}

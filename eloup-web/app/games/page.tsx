@@ -19,7 +19,7 @@ export default async function GamesPage() {
       <p className="text-sm text-slate-400">global_admin only</p>
 
       <section className="mt-6">
-        <h2 className="flex items-center text-sm uppercase tracking-wide text-slate-500">
+        <h2 className="flex items-center text-sm uppercase tracking-wide text-muted-foreground">
           Catalog
           <InfoTip label="catalog row format">
             Each row shows <strong>name (format)</strong> on the left and{' '}
@@ -37,7 +37,7 @@ export default async function GamesPage() {
               >
                 <span className="inline-flex items-center">
                   {g.name}{' '}
-                  <span className="ml-1 text-slate-500">({g.format})</span>
+                  <span className="ml-1 text-muted-foreground">({g.format})</span>
                   <InfoTip label="match format">
                     How players are grouped: <strong>1v1</strong> is two solo
                     players, <strong>team</strong> is balanced teams sharing a
@@ -45,7 +45,7 @@ export default async function GamesPage() {
                     pairwise scoring.
                   </InfoTip>
                 </span>
-                <span className="inline-flex items-center text-slate-500">
+                <span className="inline-flex items-center text-muted-foreground">
                   {g.min_participants}–{g.max_participants}
                   <InfoTip label="participant range">
                     Allowed player count: <strong>min–max</strong>. A range of{' '}
@@ -67,7 +67,7 @@ export default async function GamesPage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Add a game</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Add a game</h2>
         <NewGameForm />
       </section>
     </main>

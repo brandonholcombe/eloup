@@ -135,7 +135,7 @@ export function DriverPlayerLink({ driverId, currentLink }: Props) {
             </ul>
           )}
           {!pending && query.trim().length > 0 && results.length === 0 && (
-            <p className="mt-2 text-xs text-slate-500">No matches.</p>
+            <p className="mt-2 text-xs text-muted-foreground">No matches.</p>
           )}
         </>
       )}

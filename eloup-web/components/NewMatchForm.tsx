@@ -190,7 +190,7 @@ export function NewMatchForm({
       </button>
 
       {game && (
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-muted-foreground">
           {game.format} — needs {game.min_participants}–{game.max_participants} participants.
         </p>
       )}

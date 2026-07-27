@@ -44,7 +44,7 @@ export default async function LeaderboardsPage({
               key={r.player_id}
               className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
             >
-              <span className="w-6 text-right text-slate-500">{i + 1}</span>
+              <span className="w-6 text-right text-muted-foreground">{i + 1}</span>
               {r.avatar_url ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img alt="" src={r.avatar_url} className="h-8 w-8 rounded-full" />

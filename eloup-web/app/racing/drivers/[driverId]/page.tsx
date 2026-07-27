@@ -51,10 +51,10 @@ export default async function DriverProfilePage({
           <Link href="/profile" className="text-blue-400 hover:text-blue-300">
             @{driver.linked_discord_handle}
           </Link>{' '}
-          <span className="text-slate-500">({driver.linked_display_name})</span>
+          <span className="text-muted-foreground">({driver.linked_display_name})</span>
         </p>
       ) : (
-        <p className="mt-1 text-xs text-slate-500">No Discord linkage — RC-local profile.</p>
+        <p className="mt-1 text-xs text-muted-foreground">No Discord linkage — RC-local profile.</p>
       )}
 
       {isAdmin && (
@@ -76,7 +76,7 @@ export default async function DriverProfilePage({
         <h2 className="text-lg font-medium">Career stats</h2>
         <table className="mt-2 w-full border-separate border-spacing-y-1 text-xs">
           <thead>
-            <tr className="text-slate-500">
+            <tr className="text-muted-foreground">
               <th className="text-left font-normal">Kind</th>
               <th className="text-right font-normal">Races</th>
               <th className="text-right font-normal">Wins</th>

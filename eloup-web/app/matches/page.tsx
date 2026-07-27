@@ -51,7 +51,7 @@ export default async function MatchesPage() {
 function Section({ title, rows, emptyMsg }: { title: string; rows: Row[]; emptyMsg: string }) {
   return (
     <section className="mt-6">
-      <h2 className="text-sm uppercase tracking-wide text-slate-500">{title}</h2>
+      <h2 className="text-sm uppercase tracking-wide text-muted-foreground">{title}</h2>
       {rows.length === 0 ? (
         <p className="mt-2 text-slate-400">{emptyMsg}</p>
       ) : (

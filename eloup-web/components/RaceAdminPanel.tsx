@@ -185,7 +185,7 @@ function PenaltyTable({
       <h3 className="text-xs uppercase tracking-wide text-slate-400">Penalties</h3>
       <table className="mt-1 w-full text-sm">
         <thead>
-          <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="py-1 pr-2">Driver</th>
             <th className="py-1 pr-2 text-right">Penalty (s)</th>
             <th className="py-1 pr-0 text-right" />
@@ -305,12 +305,12 @@ function VoidLapsTable({
   return (
     <div className="mt-4">
       <h3 className="text-xs uppercase tracking-wide text-slate-400">Voided fastest laps</h3>
-      <p className="mb-2 text-[11px] text-slate-500">
+      <p className="mb-2 text-[11px] text-muted-foreground">
         Voiding N laps skips the driver&apos;s N fastest laps from the top-3-avg ranking.
       </p>
       <table className="mt-1 w-full text-sm">
         <thead>
-          <tr className="text-left text-xs uppercase tracking-wide text-slate-500">
+          <tr className="text-left text-xs uppercase tracking-wide text-muted-foreground">
             <th className="py-1 pr-2">Driver</th>
             <th className="py-1 pr-2 text-right">Void laps</th>
             <th className="py-1 pr-0 text-right" />

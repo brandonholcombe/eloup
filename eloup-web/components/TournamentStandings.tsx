@@ -24,7 +24,7 @@ export function TournamentStandings({
                 : 'border-border bg-card')
             }
           >
-            <span className="w-6 text-right text-slate-500">{i + 1}</span>
+            <span className="w-6 text-right text-muted-foreground">{i + 1}</span>
             {r.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img alt="" src={r.avatar_url} className="h-8 w-8 rounded-full" />
@@ -35,7 +35,7 @@ export function TournamentStandings({
             )}
             <div className="flex-1 truncate">
               <div className="truncate text-sm">{r.display_name}</div>
-              <div className="text-xs text-slate-500">
+              <div className="text-xs text-muted-foreground">
                 {r.wins}W · {r.matches_played - r.wins}L · {r.matches_played} played
               </div>
             </div>

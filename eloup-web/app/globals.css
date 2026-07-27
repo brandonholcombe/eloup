@@ -22,7 +22,7 @@
   --secondary: 217 33% 17%; /* slate-800 */
   --secondary-foreground: 210 40% 96%;
   --muted: 217 33% 17%; /* slate-800 */
-  --muted-foreground: 215 16% 47%; /* slate-500 (Phase 0; ->400 in Phase 2) */
+  --muted-foreground: 215 20% 65%; /* slate-400 (UX2 2a contrast bump) */
   --accent: 217 33% 17%; /* slate-800 */
   --accent-foreground: 210 40% 96%;
   --destructive: 0 62% 45%;

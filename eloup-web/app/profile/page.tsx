@@ -62,17 +62,17 @@ export default async function ProfilePage() {
       <p className="text-sm text-slate-400">Role: {session.user.role}</p>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Overall</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Overall</h2>
         <p className="mt-2 font-mono text-3xl tabular-nums">
           {overall ? Math.round(overall.current_rating) : 1200}
         </p>
         {overall?.escrowed_elo ? (
-          <p className="text-xs text-slate-500">{Math.round(overall.escrowed_elo)} escrowed</p>
+          <p className="text-xs text-muted-foreground">{Math.round(overall.escrowed_elo)} escrowed</p>
         ) : null}
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">By category</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">By category</h2>
         {categoryRollup.length === 0 ? (
           <p className="mt-2 text-slate-400">No games played yet.</p>
         ) : (
@@ -93,7 +93,7 @@ export default async function ProfilePage() {
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Games</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Games</h2>
         {games.length === 0 ? (
           <p className="mt-2 text-slate-400">No games played yet.</p>
         ) : (
@@ -124,7 +124,7 @@ export default async function ProfilePage() {
 
       {adminLinks.length > 0 && (
         <section className="mt-6">
-          <h2 className="text-sm uppercase tracking-wide text-slate-500">Admin</h2>
+          <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Admin</h2>
           <ul className="mt-2 space-y-2">
             {adminLinks.map((link) => (
               <li key={link.href}>
@@ -133,7 +133,7 @@ export default async function ProfilePage() {
                   className="flex min-h-tap items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-slate-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-400"
                 >
                   <span>{link.label}</span>
-                  <span aria-hidden className="text-slate-500">→</span>
+                  <span aria-hidden className="text-muted-foreground">→</span>
                 </Link>
               </li>
             ))}
@@ -142,7 +142,7 @@ export default async function ProfilePage() {
       )}
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Recent</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Recent</h2>
         {recent.length === 0 ? (
           <p className="mt-2 text-slate-400">No matches yet.</p>
         ) : (
@@ -153,7 +153,7 @@ export default async function ProfilePage() {
                 className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span>
-                  {r.game_name} <span className="text-slate-500">#{r.placement ?? '?'}</span>
+                  {r.game_name} <span className="text-muted-foreground">#{r.placement ?? '?'}</span>
                 </span>
                 <span className="font-mono tabular-nums">
                   {r.rating_delta != null

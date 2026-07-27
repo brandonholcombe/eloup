@@ -10,7 +10,7 @@ export function AdminForceConfirmButton({ matchId }: { matchId: string }) {
 
   return (
     <div className="mt-4 border-t border-slate-800 pt-3">
-      <p className="mb-2 text-xs uppercase tracking-wide text-slate-500">Admin</p>
+      <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Admin</p>
       <button
         type="button"
         disabled={isPending}

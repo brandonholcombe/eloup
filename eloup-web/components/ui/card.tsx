@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { Slot } from '@radix-ui/react-slot';
 
 import { cn } from '@/lib/utils';
 
@@ -6,9 +7,15 @@ import { cn } from '@/lib/utils';
 // explicit `border-border` (slate-800) — Phase 0 intentionally did NOT add
 // shadcn's global `* { border-color: var(--border) }` base rule, so the color
 // must live on the component or `border` would fall back to currentColor.
-const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
-  ({ className, ...props }, ref) => (
-    <div
+// `asChild` (UX2 2a.0) lets a row keep its host element (<li>/<Link>/<section>)
+// while adopting the card look via Slot class-merge.
+const Card = React.forwardRef<
+  HTMLDivElement,
+  React.HTMLAttributes<HTMLDivElement> & { asChild?: boolean }
+>(({ className, asChild = false, ...props }, ref) => {
+  const Comp = asChild ? Slot : 'div';
+  return (
+    <Comp
       ref={ref}
       className={cn(
         'rounded-md border border-border bg-card text-card-foreground',
@@ -16,8 +23,8 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
       )}
       {...props}
     />
-  ),
-);
+  );
+});
 Card.displayName = 'Card';
 
 const CardHeader = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(

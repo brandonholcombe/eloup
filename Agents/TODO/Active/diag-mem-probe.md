@@ -108,6 +108,24 @@ spikes with any concurrent load.
   `mem` block, status 200; with flag off, bare `{ ok: true }`; 503 path untouched.
 - `align.py check` OK (no symbol change).
 
+## Findings so far (2026-07-26)
+
+Probe deployed (image `4f841d7`, `DIAG_MEM=1`). Fresh pod baseline: **rss 96 MB /
+heap 35 MB** at 39s uptime. A controlled read-only load test (3,600 requests over
+~18 min across `/leaderboards`, `/racing`, `/api/leaderboards`, `/`) then sampled
+`/api/health`:
+- rss stayed in **87–136 MB** through all 3,600 requests (one-time ~40 MB warmup,
+  then flat; dipped to 118 mid-run as GC reclaimed).
+- On idle after load, rss **receded to ~113 MB** (132→113) — memory IS reclaimed.
+
+**Verdict: the public read paths have NO leak** — stable ~125 MB working set with
+huge headroom under 768 Mi. Combined with the earlier repro (per-request
+`.prepare()` plateaus) and static analysis (no module-level accumulators), the
+~6h OOMs are **not** steady-state read-path growth. They are spike-driven on paths
+this anonymous load can't reach: **RC import** (`/api/racing/import` parses files /
+builds arrays) or **write/concurrency bursts** during real party use. Leaving the
+probe ON to catch an organic (authenticated/party) climb before concluding.
+
 ## Follow-up (do not skip)
 After the trend is captured, REVERT this probe (or gate it behind an env flag)
 so prod `/api/health` returns to its minimal shape. Track as a checklist item in

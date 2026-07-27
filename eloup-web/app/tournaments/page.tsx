@@ -36,7 +36,7 @@ export default async function TournamentsPage() {
               >
                 <span className="truncate">{t.name}</span>
                 {t.ends_at && (
-                  <span className="text-xs text-slate-500">ends {t.ends_at.slice(0, 10)}</span>
+                  <span className="text-xs text-muted-foreground">ends {t.ends_at.slice(0, 10)}</span>
                 )}
               </Link>
             </li>

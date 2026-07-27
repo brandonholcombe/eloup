@@ -115,7 +115,7 @@ export default async function RaceDetailPage({
   const chartSection = (
     <section>
       <RaceChartSection drivers={chartData} />
-      <p className="mt-1 text-[11px] text-slate-500">
+      <p className="mt-1 text-[11px] text-muted-foreground">
         Laps over {DEFAULT_OUTLIER_MULTIPLIER}× a driver&apos;s fastest are hidden from the chart
         as crashes / resets
         {outlierCount > 0 ? ` (${outlierCount} hidden)` : ''}. Tap a chip to toggle, long-press
@@ -196,10 +196,10 @@ export default async function RaceDetailPage({
         </tbody>
       </table>
       {hasPenalty && !isRankingByTop3Avg && (
-        <p className="mt-1 text-[11px] text-slate-500">Total includes penalty.</p>
+        <p className="mt-1 text-[11px] text-muted-foreground">Total includes penalty.</p>
       )}
       {isRankingByTop3Avg && hasVoid && (
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-1 text-[11px] text-muted-foreground">
           Voided laps skip the driver&apos;s N fastest from the top-3-avg ranking.
         </p>
       )}
@@ -219,9 +219,9 @@ export default async function RaceDetailPage({
         >
           {race.track_name}
         </Link>
-        <span className="text-slate-500">·</span>
-        <span className="uppercase tracking-wide text-slate-500">{race.race_kind}</span>
-        <span className="text-slate-500">·</span>
+        <span className="text-muted-foreground">·</span>
+        <span className="uppercase tracking-wide text-muted-foreground">{race.race_kind}</span>
+        <span className="text-muted-foreground">·</span>
         <time className="font-mono">{formatRecordedDate(race.race_started_at)}</time>
       </div>
 
@@ -346,10 +346,10 @@ function DriverStatGrid({ stats }: { stats: DriverStats }) {
           key={it.label}
           className="rounded border border-border bg-card px-2 py-1.5"
         >
-          <dt className="text-[10px] uppercase tracking-wide text-slate-500">{it.label}</dt>
+          <dt className="text-[10px] uppercase tracking-wide text-muted-foreground">{it.label}</dt>
           <dd className="mt-0.5 flex items-baseline gap-1 font-mono tabular-nums text-slate-100">
             <span>{it.value}</span>
-            {it.sub && <span className="text-[9px] text-slate-500">{it.sub}</span>}
+            {it.sub && <span className="text-[9px] text-muted-foreground">{it.sub}</span>}
           </dd>
         </div>
       ))}

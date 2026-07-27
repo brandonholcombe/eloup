@@ -78,7 +78,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
                 </span>
                 <span className="text-slate-400">#{r.placement ?? '?'}</span>
               </div>
-              <div className="mt-1 flex items-center justify-between text-xs text-slate-500">
+              <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{r.team_label ? `Team ${r.team_label}` : ' '}</span>
                 <span>
                   {confirmed ? '✓ confirmed' : 'awaiting confirmation'}

@@ -44,12 +44,12 @@ export default async function TournamentDetailPage({
       </Link>
       <header className="mt-2 flex items-baseline justify-between gap-2">
         <h1 className="truncate text-2xl font-semibold">{tournament.name}</h1>
-        <span className="whitespace-nowrap text-xs text-slate-500">
+        <span className="whitespace-nowrap text-xs text-muted-foreground">
           {members.length} member{members.length === 1 ? '' : 's'}
         </span>
       </header>
       {tournament.ends_at && (
-        <p className="mt-1 text-xs text-slate-500">ends {tournament.ends_at.slice(0, 10)}</p>
+        <p className="mt-1 text-xs text-muted-foreground">ends {tournament.ends_at.slice(0, 10)}</p>
       )}
 
       {viewerIsAdmin && (
@@ -61,12 +61,12 @@ export default async function TournamentDetailPage({
       )}
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Standings</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Standings</h2>
         <TournamentStandings rows={standings} viewerId={viewer.id} />
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Recent matches</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Recent matches</h2>
         {recent.length === 0 ? (
           <p className="mt-2 text-slate-400">No confirmed matches yet.</p>
         ) : (
@@ -78,7 +78,7 @@ export default async function TournamentDetailPage({
                   className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
                 >
                   <span>{m.game_name}</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="text-xs text-muted-foreground">
                     {(m.ended_at ?? m.created_at).slice(0, 10)}
                   </span>
                 </Link>
@@ -95,7 +95,7 @@ export default async function TournamentDetailPage({
       </section>
 
       <section className="mt-6">
-        <h2 className="text-sm uppercase tracking-wide text-slate-500">Members</h2>
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Members</h2>
         <ul className="mt-2 space-y-2">
           {members.map((m) => (
             <MemberRow

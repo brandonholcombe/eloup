@@ -27,7 +27,7 @@ export default async function TrackLeaderboardPage({
       <h1 className="mt-2 text-2xl font-semibold">{track.name}</h1>
       <p className="mt-1 text-sm text-slate-400">All-time best laps for this track.</p>
       {track.layout_notes && (
-        <p className="mt-2 text-xs text-slate-500">{track.layout_notes}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{track.layout_notes}</p>
       )}
 
       {bests.length === 0 ? (
@@ -39,7 +39,7 @@ export default async function TrackLeaderboardPage({
               key={b.driver_id}
               className="flex items-center gap-3 rounded-md border border-border bg-card px-3 py-2"
             >
-              <span className="w-6 text-right font-mono text-slate-500">{i + 1}</span>
+              <span className="w-6 text-right font-mono text-muted-foreground">{i + 1}</span>
               <span
                 aria-hidden
                 className="inline-block h-2 w-2 rounded-full"
