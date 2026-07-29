@@ -38,7 +38,11 @@ export function AdminForceConfirmButton({ matchId }: { matchId: string }) {
       >
         {isPending ? 'Confirming…' : 'Force confirm (admin)'}
       </Button>
-      {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
+      {err && (
+        <p role="alert" className="mt-2 text-xs text-red-400">
+          {err}
+        </p>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { db } from '@/lib/db/client';
 import { ConfirmRowButton } from '@/components/ConfirmRowButton';
 import { AdminForceConfirmButton } from '@/components/AdminForceConfirmButton';
 import { canForceConfirmMatch, type SessionPlayer } from '@/lib/permissions';
+import { Card } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
     )
     .all(id) as RowDetail[];
 
+  // Surface the viewer's confirm action in an always-visible banner (below the
+  // header) so it's reachable without scrolling on large FFA/team matches.
+  const myRow = session?.user ? rows.find((r) => r.player_id === session.user!.id) : undefined;
+  const showConfirmBanner = !!myRow && myRow.confirmed_at == null && match.status === 'pending';
+
   return (
     <main className="p-4">
       <Link href="/matches" className="text-sm text-slate-400 hover:text-slate-200">
@@ -60,16 +66,24 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
       </Link>
       <header className="mt-2">
         <h1 className="text-xl font-semibold">{match.game_name}</h1>
-        <p className="text-sm text-slate-400">Status: {match.status}</p>
+        <p className="text-sm text-muted-foreground">Status: {match.status}</p>
       </header>
+      {showConfirmBanner && (
+        <Card className="mt-3 border-blue-500/50 bg-blue-500/10 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm">Your result is awaiting your confirmation.</p>
+            <ConfirmRowButton matchId={match.id} />
+          </div>
+        </Card>
+      )}
       <ul className="mt-4 space-y-2">
         {rows.map((r) => {
           const isMine = session?.user?.id === r.player_id;
           const confirmed = r.confirmed_at != null;
           return (
+            <Card asChild key={r.player_id}>
             <li
-              key={r.player_id}
-              className="rounded-md border border-border bg-card p-3 text-sm"
+              className="p-3 text-sm"
             >
               <div className="flex items-center justify-between">
                 <span className="font-medium">
@@ -90,10 +104,8 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
                   )}
                 </span>
               </div>
-              {isMine && !confirmed && match.status === 'pending' && (
-                <ConfirmRowButton matchId={match.id} />
-              )}
             </li>
+            </Card>
           );
         })}
       </ul>

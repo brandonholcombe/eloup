@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 export function ConfirmRowButton({ matchId }: { matchId: string }) {
   const router = useRouter();
@@ -9,8 +10,8 @@ export function ConfirmRowButton({ matchId }: { matchId: string }) {
   const [err, setErr] = useState<string | null>(null);
 
   return (
-    <div className="mt-3">
-      <button
+    <div>
+      <Button
         type="button"
         disabled={isPending}
         onClick={() => {
@@ -27,11 +28,15 @@ export function ConfirmRowButton({ matchId }: { matchId: string }) {
             router.refresh();
           });
         }}
-        className="h-tap min-w-tap rounded-md bg-blue-500 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="h-tap min-w-tap shadow-none"
       >
         {isPending ? 'Confirming…' : 'Confirm my row'}
-      </button>
-      {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
+      </Button>
+      {err && (
+        <p role="alert" className="mt-2 text-xs text-red-400">
+          {err}
+        </p>
+      )}
     </div>
   );
 }

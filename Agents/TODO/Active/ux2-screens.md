@@ -95,8 +95,13 @@ switching to a 1v1 game fires the 2-row seed; `+ Add participant` picks the firs
 UNUSED player. Buttons adopted `<Button>` (per-screen rollout); error `<p>` got
 `role="alert"`. Local functional test: POST `/api/matches` → **201**, detail page
 shows the tapped winner as #1. Team path re-verified via screenshot.
-Remaining 2b: sticky confirm bar on `/matches/[id]` + `role="alert"` on the
-confirm/admin buttons.
+**Confirm reachability + a11y — DONE (2026-07-29).** Instead of a bottom sticky
+bar (awkward under the fixed nav), added an always-visible **confirm banner**
+below the header on `/matches/[id]` when the viewer's row is pending — reachable
+without scrolling on large matches; removed the now-duplicate inline button.
+`ConfirmRowButton` → `<Button>` + `role="alert"`; `AdminForceConfirmButton` error
+got `role="alert"`. Participant rows adopted `<Card asChild>` (per-screen). Verified
+via screenshot. **PART 2b COMPLETE.**
 - **Match entry (review #2):** for `1v1`, auto-seed TWO participant rows and a
   one-tap winner toggle that sets placements (no manual number typing); pre-fill
   placements sequentially for FFA. Add `inputMode="numeric"` + `enterKeyHint` +
