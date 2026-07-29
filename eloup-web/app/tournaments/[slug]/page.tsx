@@ -88,7 +88,7 @@ export default async function TournamentDetailPage({
         )}
         <Link
           href={{ pathname: '/matches/new', query: { tournament: tournament.slug } }}
-          className="mt-3 inline-block h-tap min-w-tap rounded-md bg-blue-500 px-3 py-1.5 text-sm font-medium text-white"
+          className="mt-3 inline-flex items-center justify-center h-tap min-w-tap rounded-md bg-blue-500 px-3 py-1.5 text-sm font-medium text-white"
         >
           + Log a tournament match
         </Link>

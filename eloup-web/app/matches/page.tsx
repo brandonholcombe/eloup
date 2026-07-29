@@ -36,7 +36,7 @@ export default async function MatchesPage() {
         <h1 className="text-2xl font-semibold">Matches</h1>
         <Link
           href="/matches/new"
-          className="h-tap min-w-tap rounded-md bg-blue-500 px-3 py-1.5 text-sm font-medium text-white"
+          className="inline-flex items-center justify-center h-tap min-w-tap rounded-md bg-blue-500 px-3 py-1.5 text-sm font-medium text-white"
         >
           + New
         </Link>

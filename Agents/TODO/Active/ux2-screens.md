@@ -75,6 +75,16 @@ The app-wide base the rest builds on. **Own commit + review cycle.**
     than as a big low-visibility churn commit here. `warning` variant + Card
     `asChild` capability now exist, so per-screen adoption is a drop-in.
 
+### PART 2a addendum — vertical-centering fix (user-flagged during review, 2026-07-29)
+H8's `h-tap` = fixed `height:44px` left text top-aligned on `<Link>`/`<a>` chips
+that lack flex centering (native `<button>`/`<input>` self-center, so they were
+fine). Fixed by adding `inline-flex items-center justify-center` to: leaderboard
+tabs (`leaderboards/page.tsx`), racing filter chips (`TrackFilter.tsx`), and the
+`+ New`/`Upload Race`/`Log a match` link CTAs (`racing/page.tsx` ×2,
+`matches/page.tsx`, `tournaments/page.tsx`, `tournaments/[slug]/page.tsx`).
+Verified via local screenshot (tab text now centered). The Phase-2 `<Button>`
+rollout wouldn't have caught these — they're links, not buttons.
+
 ### PART 2b — Core flow ergonomics (h9 P2)
 - **Match entry (review #2):** for `1v1`, auto-seed TWO participant rows and a
   one-tap winner toggle that sets placements (no manual number typing); pre-fill

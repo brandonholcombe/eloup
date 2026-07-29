@@ -38,7 +38,7 @@ export default async function RacingIndexPage({
         {canUpload && (
           <Link
             href="/racing/upload"
-            className="h-tap min-w-tap shrink-0 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-400"
+            className="inline-flex items-center justify-center h-tap min-w-tap shrink-0 rounded-md bg-blue-500 px-3 py-2 text-sm font-medium text-white hover:bg-blue-400"
           >
             Upload
           </Link>
@@ -59,7 +59,7 @@ export default async function RacingIndexPage({
           {canUpload && (
             <Link
               href="/racing/upload"
-              className="inline-block h-tap min-w-tap rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-400"
+              className="inline-flex items-center justify-center h-tap min-w-tap rounded-md bg-blue-500 px-4 py-2 text-sm font-medium text-white hover:bg-blue-400"
             >
               Upload Lap Monitor JSON or TXT
             </Link>
