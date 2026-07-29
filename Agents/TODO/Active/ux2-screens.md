@@ -117,6 +117,21 @@ via screenshot. **PART 2b COMPLETE.**
 - **a11y:** `role="alert"` on the submit/confirm error `<p>`s (H8 review deferral).
 
 ### PART 2c — Stat & ranking polish
+**Core DONE (2026-07-29), verified via screenshots:**
+- **Top-3 medals** 🥇🥈🥉 on leaderboards + tournament standings ranks 1–3
+  (`lib/rank.ts` `rankMedal`); plain number for 4+.
+- **Result coloring** (`lib/result.ts` `deltaColor`/`statusColor`): +delta green,
+  −delta red, pending amber, confirmed green — applied on profile RECENT, matches
+  list status, and match-detail Δ + confirm state.
+- **Pluralization** fix ("1 game"/"1 match"); bumped the too-dim `text-slate-600`
+  category subheading to `muted-foreground`; `min-h-tap` on the matches list rows.
+
+**Remaining 2c (optional/heavier — deferred):** profile stat-tile redesign
+(numbers are still mono rows) and the **"your rank"** affordance (new engineering:
+needs `auth()` + a rank query on leaderboards — see reviewer note). Neither blocks;
+both lower delight-per-effort than the core above.
+
+--- original scope ---
 - **State coloring (review #5):** deltas green/red (`+15`/`-10`), `pending` amber,
   `confirmed` muted-green — on profile RECENT + match rows.
 - **Stat hierarchy (review #5):** profile numbers as proper stat tiles rather

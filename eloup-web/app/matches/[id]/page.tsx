@@ -6,6 +6,7 @@ import { ConfirmRowButton } from '@/components/ConfirmRowButton';
 import { AdminForceConfirmButton } from '@/components/AdminForceConfirmButton';
 import { canForceConfirmMatch, type SessionPlayer } from '@/lib/permissions';
 import { Card } from '@/components/ui/card';
+import { deltaColor } from '@/lib/result';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,9 +96,11 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
               <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
                 <span>{r.team_label ? `Team ${r.team_label}` : ' '}</span>
                 <span>
-                  {confirmed ? '✓ confirmed' : 'awaiting confirmation'}
+                  <span className={confirmed ? 'text-emerald-400' : 'text-amber-400'}>
+                    {confirmed ? '✓ confirmed' : 'awaiting confirmation'}
+                  </span>
                   {r.rating_delta != null && (
-                    <span className="ml-2 font-mono tabular-nums text-slate-300">
+                    <span className={`ml-2 font-mono tabular-nums ${deltaColor(r.rating_delta)}`}>
                       Δ {r.rating_delta >= 0 ? '+' : ''}
                       {Math.round(r.rating_delta)}
                     </span>

@@ -1,4 +1,5 @@
 import type { StandingsRow } from '@/lib/tournament-standings';
+import { rankMedal } from '@/lib/rank';
 
 export function TournamentStandings({
   rows,
@@ -24,7 +25,7 @@ export function TournamentStandings({
                 : 'border-border bg-card')
             }
           >
-            <span className="w-6 text-right text-muted-foreground">{i + 1}</span>
+            <span className="w-6 text-right text-muted-foreground">{rankMedal(i + 1) ?? i + 1}</span>
             {r.avatar_url ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img alt="" src={r.avatar_url} className="h-8 w-8 rounded-full" />

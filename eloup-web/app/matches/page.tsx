@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
+import { statusColor } from '@/lib/result';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,10 +61,10 @@ function Section({ title, rows, emptyMsg }: { title: string; rows: Row[]; emptyM
             <li key={r.id}>
               <Link
                 href={`/matches/${r.id}` as never}
-                className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
+                className="flex min-h-tap items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm"
               >
                 <span>{r.game_name}</span>
-                <span className="text-slate-400">{r.status}</span>
+                <span className={statusColor(r.status)}>{r.status}</span>
               </Link>
             </li>
           ))}

@@ -8,6 +8,7 @@ import {
 } from '@/lib/db/queries';
 import { categoryLabel } from '@/lib/games/categories';
 import { adminNavLinks } from '@/lib/permissions';
+import { deltaColor, statusColor } from '@/lib/result';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,7 +85,8 @@ export default async function ProfilePage() {
               >
                 <span>{c.label}</span>
                 <span className="font-mono tabular-nums">
-                  {c.weightedRating} · {c.gameCount} games · {c.totalMatches} matches
+                  {c.weightedRating} · {c.gameCount} game{c.gameCount === 1 ? '' : 's'} ·{' '}
+                  {c.totalMatches} match{c.totalMatches === 1 ? '' : 'es'}
                 </span>
               </li>
             ))}
@@ -100,7 +102,7 @@ export default async function ProfilePage() {
           <div className="mt-2 space-y-3">
             {Object.entries(groupByCategory(games)).map(([slug, rows]) => (
               <div key={slug}>
-                <h3 className="text-xs uppercase tracking-wide text-slate-600">
+                <h3 className="text-xs uppercase tracking-wide text-muted-foreground">
                   {categoryLabel(slug)}
                 </h3>
                 <ul className="mt-1 space-y-1">
@@ -155,7 +157,11 @@ export default async function ProfilePage() {
                 <span>
                   {r.game_name} <span className="text-muted-foreground">#{r.placement ?? '?'}</span>
                 </span>
-                <span className="font-mono tabular-nums">
+                <span
+                  className={`font-mono tabular-nums ${
+                    r.rating_delta != null ? deltaColor(r.rating_delta) : statusColor(r.status)
+                  }`}
+                >
                   {r.rating_delta != null
                     ? `${r.rating_delta >= 0 ? '+' : ''}${Math.round(r.rating_delta)}`
                     : r.status}
