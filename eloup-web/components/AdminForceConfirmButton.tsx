@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import { Button } from '@/components/ui/button';
 
 export function AdminForceConfirmButton({ matchId }: { matchId: string }) {
   const router = useRouter();
@@ -11,8 +12,9 @@ export function AdminForceConfirmButton({ matchId }: { matchId: string }) {
   return (
     <div className="mt-4 border-t border-slate-800 pt-3">
       <p className="mb-2 text-xs uppercase tracking-wide text-muted-foreground">Admin</p>
-      <button
+      <Button
         type="button"
+        variant="warning"
         disabled={isPending}
         onClick={() => {
           if (
@@ -32,10 +34,10 @@ export function AdminForceConfirmButton({ matchId }: { matchId: string }) {
             router.refresh();
           });
         }}
-        className="h-tap min-w-tap rounded-md bg-amber-600 px-4 py-1.5 text-sm font-medium text-white disabled:opacity-50"
+        className="h-tap min-w-tap"
       >
         {isPending ? 'Confirming…' : 'Force confirm (admin)'}
-      </button>
+      </Button>
       {err && <p className="mt-2 text-xs text-red-400">{err}</p>}
     </div>
   );

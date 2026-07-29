@@ -65,12 +65,15 @@ The app-wide base the rest builds on. **Own commit + review cycle.**
 - **Card adoption (review #4, deferred from 1a):** after 2a.0, convert the
   tokenized `<li>`/`<Link>`/`<section>` card rows to `<Card asChild>` (Slot
   preserves the host element). Pixel-diff each.
-- **Button variants (review #3/#4, deferred from 1b):** roll the **28** inline
-  `<button>`s to `<Button>` — blue→`default`, slate→`secondary`, red→`destructive`;
-  add a **`warning`** variant (amber, matching the current **amber-600** admin
-  button) for "Force confirm (admin)". **Pin `h-tap` on every swap** (default
-  `<Button>` is `h-9`/36px → would break the H8 44px target). Exclude the
-  LapChart/CompareDrivers toggle chips. Preserve `disabled`, `aria`, `'use server'`.
+- **Button variants (review #3/#4, deferred from 1b):** add a **`warning`**
+  variant (amber-600) to `button.tsx` and convert the "Force confirm (admin)"
+  button (`AdminForceConfirmButton.tsx`) to it (pinned `h-tap`). **DONE.**
+  - **Scope decision (user, 2026-07-29):** the remaining **27 inline `<button>`
+    → `<Button>` rollout** and the **`<Card asChild>` row adoption** are
+    **folded into 2b/2c** — converted **per-screen as each screen is edited**
+    for ergonomics/polish (same files touched once, verified visually), rather
+    than as a big low-visibility churn commit here. `warning` variant + Card
+    `asChild` capability now exist, so per-screen adoption is a drop-in.
 
 ### PART 2b — Core flow ergonomics (h9 P2)
 - **Match entry (review #2):** for `1v1`, auto-seed TWO participant rows and a
