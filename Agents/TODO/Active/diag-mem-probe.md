@@ -1,7 +1,19 @@
 # DIAG — Temporary memory probe on /api/health
 
 ## Author: claude-opus-4.8-diag-implementer
-## Status: In Progress
+## Status: Complete
+
+## Conclusion (2026-07-29) — NO LEAK
+
+After ~72h uptime the live pod reads **rss 123 MB / heapUsed 46 MB** — flat vs
+the ~125 MB under-load measurement, **0 restarts / 3 days**. Combined with the
+load test (flat 87–136 MB, recedes when idle) this is definitive: **no memory
+leak.** The historical OOMs were spike-driven (RC import / write / concurrency
+bursts during real parties), not steady-state growth; 768Mi is comfortable for
+the ~123 MB steady state. Probe **disabled** by removing `DIAG_MEM` from
+`configmap-web.yaml` (the gated health-route code stays dormant/reusable — no
+revert needed). Follow-up if OOMs ever recur during a party: profile the
+RC-import path specifically.
 
 ## Reviewer findings folded (2026-07-26)
 
