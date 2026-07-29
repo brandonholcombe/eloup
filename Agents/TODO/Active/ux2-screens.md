@@ -86,6 +86,17 @@ Verified via local screenshot (tab text now centered). The Phase-2 `<Button>`
 rollout wouldn't have caught these — they're links, not buttons.
 
 ### PART 2b — Core flow ergonomics (h9 P2)
+**Match entry — DONE (2026-07-29), verified end-to-end.** `NewMatchForm.tsx`
+rewritten: 1v1 auto-seeds two rows (viewer + first DISTINCT opponent — dedupe
+fixed) with a one-tap **"Who won?"** toggle (no number typing); FFA/team keep the
+row UI with `inputMode="numeric"`+`enterKeyHint`+clamp `[1, rows.length]` on Place
+(empty→1, never 0); re-seed now runs on a **[gameId, tournamentId] effect** so
+switching to a 1v1 game fires the 2-row seed; `+ Add participant` picks the first
+UNUSED player. Buttons adopted `<Button>` (per-screen rollout); error `<p>` got
+`role="alert"`. Local functional test: POST `/api/matches` → **201**, detail page
+shows the tapped winner as #1. Team path re-verified via screenshot.
+Remaining 2b: sticky confirm bar on `/matches/[id]` + `role="alert"` on the
+confirm/admin buttons.
 - **Match entry (review #2):** for `1v1`, auto-seed TWO participant rows and a
   one-tap winner toggle that sets placements (no manual number typing); pre-fill
   placements sequentially for FFA. Add `inputMode="numeric"` + `enterKeyHint` +
