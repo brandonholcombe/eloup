@@ -1,7 +1,23 @@
 # OPS — Nightly SQLite backups to an in-cluster PVC
 
 ## Author: claude-opus-4.8-backups-implementer
-## Status: In Progress
+## Status: Complete
+
+## Outcome (2026-07-31) — VERIFIED WORKING
+
+Deployed and proven end-to-end. A manual test job
+(`kubectl create job --from=cronjob/eloup-web-backup`) Succeeded and produced
+`/backups/eloup-20260731T235503Z.sqlite` (512KB); independent inspection from a
+throwaway pod confirmed `PRAGMA integrity_check = ok` and real data (5 players).
+
+**One deploy-time fix beyond the review:** the app's node runs at 100% CPU
+*requests* (2000m/2000m reserved), and the backup must co-locate there (RWO), so
+the job stayed Pending until `requests.cpu` was set to `"0"` (no reservation,
+bursts on spare cycles). Committed in `9b1fe42`. Memory (64Mi) fit fine.
+
+Shipped: `bholcombe/eloup-sqlite` (digest-pinned sqlite3 image),
+`K8s/pvc-backups.yaml`, `K8s/cronjob-backup.yaml` (nightly 03:00 UTC, keep 7,
+integrity gate, restore runbook). First automatic run: tonight 03:00 UTC.
 
 ## Reviewer findings folded (2026-07-31)
 
