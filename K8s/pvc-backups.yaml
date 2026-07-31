@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: eloup-backups
+  namespace: eloup
+  labels:
+    app: eloup-web
+    component: backups
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: linode-block-storage-retain
+  resources:
+    requests:
+      # Party-scale SQLite DB is tiny; a week of nightly dumps is KB-MB.
+      # `retain` reclaim so deleting the PVC never nukes backup history.
+      storage: 1Gi

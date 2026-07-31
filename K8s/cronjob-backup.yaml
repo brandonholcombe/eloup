@@ -1,0 +1,98 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: eloup-web-backup
+  namespace: eloup
+  labels:
+    app: eloup-web
+    component: backups
+spec:
+  # Nightly at 03:00 UTC. Keep the last 7 dumps (retention runs in the job).
+  schedule: "0 3 * * *"
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 3600
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      template:
+        metadata:
+          labels:
+            app: eloup-web
+            component: backups
+        spec:
+          restartPolicy: OnFailure
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            fsGroup: 1000
+          # RWO `data-eloup-web-0` is single-NODE (not single-pod), so this job
+          # must land on the node holding the volume to co-mount it (bind mount
+          # of the already-staged ext4 — no dual raw mount, no corruption).
+          affinity:
+            podAffinity:
+              requiredDuringSchedulingIgnoredDuringExecution:
+                - labelSelector:
+                    matchLabels:
+                      app: eloup-web
+                  topologyKey: kubernetes.io/hostname
+          containers:
+            - name: backup
+              # Digest-pinned; sqlite3 baked in at build (no runtime egress),
+              # runs non-root uid 1000. Built from docker/eloup-sqlite/.
+              image: bholcombe/eloup-sqlite:1@sha256:31d1c2a4f7858f04109663258d8ab3f772828388a40205cca7b672589f8bc1f7
+              command:
+                - /bin/sh
+                - -c
+                - |
+                  set -euo pipefail
+                  ts=$(date -u +%Y%m%dT%H%M%SZ)
+                  dest="/backups/eloup-${ts}.sqlite"
+                  echo "backing up /data/eloup.sqlite -> ${dest}"
+                  # Online .backup: WAL-safe consistent snapshot while the app
+                  # keeps writing. /data is mounted RW because opening a live
+                  # WAL DB needs to map/write -shm.
+                  sqlite3 /data/eloup.sqlite ".backup '${dest}'"
+                  # Integrity gate: PRAGMA exits 0 even on errors, so assert ==ok.
+                  result=$(sqlite3 "${dest}" 'PRAGMA integrity_check;')
+                  if [ "${result}" != "ok" ]; then
+                    echo "integrity_check FAILED: ${result}" >&2
+                    rm -f "${dest}"
+                    exit 1
+                  fi
+                  echo "backup ok ($(wc -c < "${dest}") bytes): ${dest}"
+                  # Retention: keep the 7 newest, delete older. Timestamps are
+                  # colon-free + lexically sortable; no spaces → the loop is safe.
+                  ls -1t /backups/eloup-*.sqlite | tail -n +8 | while read -r old; do
+                    echo "pruning ${old}"
+                    rm -f "${old}"
+                  done
+                  echo "current backups:"
+                  ls -1t /backups/eloup-*.sqlite
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: backups
+                  mountPath: /backups
+              resources:
+                requests:
+                  cpu: "50m"
+                  memory: "64Mi"
+                limits:
+                  cpu: "250m"
+                  memory: "256Mi"
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: false
+                capabilities:
+                  drop:
+                    - ALL
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: data-eloup-web-0
+            - name: backups
+              persistentVolumeClaim:
+                claimName: eloup-backups
