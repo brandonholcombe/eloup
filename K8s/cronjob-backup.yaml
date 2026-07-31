@@ -78,7 +78,12 @@ spec:
                   mountPath: /backups
               resources:
                 requests:
-                  cpu: "50m"
+                  # cpu:"0" (no reservation) so the job can schedule onto the
+                  # app's node even though its CPU requests sit at 100% — it
+                  # bursts on spare cycles for the few seconds a backup takes.
+                  # Co-location is mandatory (RWO data volume), so we can't just
+                  # pick a less-busy node.
+                  cpu: "0"
                   memory: "64Mi"
                 limits:
                   cpu: "250m"
