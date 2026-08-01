@@ -2,9 +2,11 @@ import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { getTrackBySlug, listRaces, listTracks } from '@/lib/db/rc';
+import { listCups } from '@/lib/db/rc-cup';
 import { canUploadRaceResults } from '@/lib/permissions';
 import { formatRecordedDate, formatRecordedDateOnly } from '@/lib/rc/datetime';
 import { TrackFilter } from '@/components/TrackFilter';
+import { CreateCupButton } from '@/components/CreateCupButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +40,7 @@ export default async function RacingIndexPage({
   const activeTrack = track ? getTrackBySlug(handle, track) : null;
   const activeSlug = activeTrack?.slug ?? null;
   const races = listRaces(handle, activeTrack ? { trackId: activeTrack.id } : {});
+  const cups = listCups(handle);
 
   return (
     <main className="mx-auto max-w-4xl p-4">
@@ -57,6 +60,31 @@ export default async function RacingIndexPage({
           </Link>
         )}
       </div>
+
+      {(cups.length > 0 || canUpload) && (
+        <section className="mt-4">
+          <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Cups</h2>
+          {cups.length === 0 ? (
+            <p className="mt-1 text-sm text-muted-foreground">No cups yet.</p>
+          ) : (
+            <ul className="mt-2 space-y-2">
+              {cups.map((c) => (
+                <li key={c.id}>
+                  <Link href={`/racing/cups/${c.slug}`}>
+                    <span className="flex items-center justify-between rounded-md border border-border bg-card px-3 py-2 text-sm">
+                      <span className="truncate">🏆 {c.name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {c.race_count} race{c.race_count === 1 ? '' : 's'}
+                      </span>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {canUpload && <CreateCupButton />}
+        </section>
+      )}
 
       <div className="mt-4">
         <TrackFilter tracks={tracks} activeSlug={activeSlug} />

@@ -41,6 +41,8 @@ describe('applyMigrations', () => {
         'rc_race_drivers',
         'rc_laps',
         'bracket_matches',
+        'rc_cups',
+        'rc_cup_races',
         'schema_migrations',
       ]),
     );
@@ -48,7 +50,7 @@ describe('applyMigrations', () => {
     const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as {
       version: number;
     }[];
-    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
     db.close();
   });
 
