@@ -86,10 +86,56 @@ export function loadBracket(
   };
 }
 
+/** Fisher–Yates shuffle (copy). Math.random is fine here (app code). */
+export function shuffleSeeds(ids: string[]): string[] {
+  const a = [...ids];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j]!, a[i]!];
+  }
+  return a;
+}
+
+/** Insert generated engine nodes for a tournament. NON-transacting — callers
+ *  wrap in a transaction. Does not guard/delete existing rows. */
+function insertBracketNodes(
+  db: Database.Database,
+  tournamentId: string,
+  playersBySeedRank: string[],
+): void {
+  const nodes = generateBracket(playersBySeedRank);
+  const ins = db.prepare(
+    `INSERT INTO bracket_matches(
+       tournament_id, node_id, bracket, round, position, p1_player_id, p2_player_id,
+       p1_void, p2_void, winner_to_node, winner_to_slot, loser_to_node, loser_to_slot,
+       status, winner_player_id, match_id)
+     VALUES (@tid,@node,@bracket,@round,@position,@p1,@p2,@p1v,@p2v,@wto,@wslot,@lto,@lslot,@status,@winner,NULL)`,
+  );
+  for (const n of nodes) {
+    ins.run({
+      tid: tournamentId,
+      node: n.id,
+      bracket: n.bracket,
+      round: n.round,
+      position: n.position,
+      p1: n.p1,
+      p2: n.p2,
+      p1v: n.p1Void ? 1 : 0,
+      p2v: n.p2Void ? 1 : 0,
+      wto: n.winnerTo?.id ?? null,
+      wslot: n.winnerTo?.slot ?? null,
+      lto: n.loserTo?.id ?? null,
+      lslot: n.loserTo?.slot ?? null,
+      status: n.status,
+      winner: n.winner,
+    });
+  }
+}
+
 /**
  * Generate + persist a double-elim bracket for the given players (seed-rank
- * order, best first) and mark the tournament format. Idempotent guard: throws if
- * a bracket already exists (regenerate = delete first). Runs in one transaction.
+ * order, best first) and mark the tournament format. Throws if a bracket already
+ * exists (regenerate via reseedBracket). Runs in one transaction.
  */
 export function createBracket(
   db: Database.Database,
@@ -98,36 +144,49 @@ export function createBracket(
 ): void {
   const tx = db.transaction(() => {
     if (bracketExists(db, tournamentId)) throw new Error('bracket already exists');
-    const nodes = generateBracket(playersBySeedRank);
-    const ins = db.prepare(
-      `INSERT INTO bracket_matches(
-         tournament_id, node_id, bracket, round, position, p1_player_id, p2_player_id,
-         p1_void, p2_void, winner_to_node, winner_to_slot, loser_to_node, loser_to_slot,
-         status, winner_player_id, match_id)
-       VALUES (@tid,@node,@bracket,@round,@position,@p1,@p2,@p1v,@p2v,@wto,@wslot,@lto,@lslot,@status,@winner,NULL)`,
-    );
-    for (const n of nodes) {
-      ins.run({
-        tid: tournamentId,
-        node: n.id,
-        bracket: n.bracket,
-        round: n.round,
-        position: n.position,
-        p1: n.p1,
-        p2: n.p2,
-        p1v: n.p1Void ? 1 : 0,
-        p2v: n.p2Void ? 1 : 0,
-        wto: n.winnerTo?.id ?? null,
-        wslot: n.winnerTo?.slot ?? null,
-        lto: n.loserTo?.id ?? null,
-        lslot: n.loserTo?.slot ?? null,
-        status: n.status,
-        winner: n.winner,
-      });
-    }
+    insertBracketNodes(db, tournamentId, playersBySeedRank);
     db.prepare(`UPDATE tournaments SET format = 'double_elim' WHERE id = ?`).run(tournamentId);
   });
   tx.immediate();
+}
+
+export type ReseedResult = { status: 'ok' } | { status: 'has_results' };
+
+/**
+ * Reshuffle/regenerate a bracket with a new order — ONLY before any result is
+ * reported. A bracket is locked once any node is `status='done'` (a played result
+ * OR a walkover — S1: gate on STATUS, not match_id, since a walkover has a NULL
+ * match_id). Generation byes (`status='bye'`) do NOT lock. Regenerates from
+ * whatever `playersBySeedRank` the caller passes (current members).
+ */
+export function reseedBracket(
+  db: Database.Database,
+  tournamentId: string,
+  playersBySeedRank: string[],
+): ReseedResult {
+  const tx = db.transaction((): ReseedResult => {
+    const { c } = db
+      .prepare(
+        `SELECT COUNT(*) AS c FROM bracket_matches WHERE tournament_id = ? AND status = 'done'`,
+      )
+      .get(tournamentId) as { c: number };
+    if (c > 0) return { status: 'has_results' };
+    db.prepare(`DELETE FROM bracket_matches WHERE tournament_id = ?`).run(tournamentId);
+    insertBracketNodes(db, tournamentId, playersBySeedRank);
+    db.prepare(`UPDATE tournaments SET format = 'double_elim' WHERE id = ?`).run(tournamentId);
+    return { status: 'ok' };
+  });
+  return tx.immediate();
+}
+
+/** Tournament members in a random draw order (for a party bracket). */
+export function shuffledMembers(db: Database.Database, tournamentId: string): string[] {
+  const ids = (
+    db
+      .prepare(`SELECT player_id FROM tournament_members WHERE tournament_id = ?`)
+      .all(tournamentId) as { player_id: string }[]
+  ).map((r) => r.player_id);
+  return shuffleSeeds(ids);
 }
 
 /** Write back the mutable columns of each node (routing is immutable). */

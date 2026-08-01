@@ -3,13 +3,19 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { getTournamentBySlug } from '@/lib/tournaments';
 import { isTournamentAdmin } from '@/lib/permissions';
-import { bracketExists, createBracket, seedMembersByElo } from '@/lib/db/bracket';
+import {
+  bracketExists,
+  createBracket,
+  seedMembersByElo,
+  shuffledMembers,
+} from '@/lib/db/bracket';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-// Create the double-elim bracket for this tournament, seeded by overall ELO.
-export async function POST(_req: Request, { params }: { params: Promise<{ slug: string }> }) {
+// Create the double-elim bracket. seeding: 'random' (default, a party draw) or
+// 'elo' (seed by overall ELO).
+export async function POST(req: Request, { params }: { params: Promise<{ slug: string }> }) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 });
   const { slug } = await params;
@@ -23,7 +29,9 @@ export async function POST(_req: Request, { params }: { params: Promise<{ slug: 
   if (bracketExists(handle, t.id)) {
     return NextResponse.json({ error: 'bracket already exists' }, { status: 409 });
   }
-  const seeds = seedMembersByElo(handle, t.id);
+  const body = (await req.json().catch(() => null)) as { seeding?: 'random' | 'elo' } | null;
+  const seeds =
+    body?.seeding === 'elo' ? seedMembersByElo(handle, t.id) : shuffledMembers(handle, t.id);
   if (seeds.length < 2) {
     return NextResponse.json({ error: 'need at least 2 members' }, { status: 400 });
   }

@@ -17,7 +17,7 @@ export function CreateBracketButton({ slug, memberCount }: { slug: string; membe
         onClick={() => {
           if (
             !window.confirm(
-              `Generate a double-elimination bracket for ${memberCount} members, seeded by ELO? Members can't change after a result is reported.`,
+              `Generate a double-elimination bracket for ${memberCount} members with a random draw? You can reshuffle until the first result is reported.`,
             )
           )
             return;

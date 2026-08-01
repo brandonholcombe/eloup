@@ -11,6 +11,8 @@ import {
   loadBracket,
   recordBracketResult,
   recordWalkover,
+  reseedBracket,
+  shuffleSeeds,
 } from '@/lib/db/bracket';
 
 function freshDb() {
@@ -114,6 +116,47 @@ describe('bracket DB layer', () => {
     const reloaded = loadBracket(db, tid).nodes.find((n) => n.id === ready.id)!;
     expect(reloaded.status).toBe('done');
     expect(reloaded.winner).toBe(ready.p1);
+  });
+
+  it('shuffleSeeds returns a permutation (same multiset)', () => {
+    const ids = ['a', 'b', 'c', 'd', 'e'];
+    const s = shuffleSeeds(ids);
+    expect(s).toHaveLength(5);
+    expect([...s].sort()).toEqual([...ids].sort());
+    expect(ids).toEqual(['a', 'b', 'c', 'd', 'e']); // input not mutated
+  });
+
+  it('reseed reshuffles before results, but is LOCKED once a result is reported', () => {
+    const db = freshDb();
+    const ps = seedPlayers(db, 8);
+    const tid = makeTournament(db, ps[0]!);
+    createBracket(db, tid, ps);
+    const order1 = loadBracket(db, tid)
+      .nodes.filter((n) => n.bracket === 'winners' && n.round === 1)
+      .map((n) => `${n.p1}-${n.p2}`)
+      .join(',');
+    // reseed with a reversed order → the WR1 entrants change
+    expect(reseedBracket(db, tid, [...ps].reverse()).status).toBe('ok');
+    const order2 = loadBracket(db, tid)
+      .nodes.filter((n) => n.bracket === 'winners' && n.round === 1)
+      .map((n) => `${n.p1}-${n.p2}`)
+      .join(',');
+    expect(order2).not.toBe(order1);
+
+    // report ONE result → bracket locks
+    const ready = loadBracket(db, tid).nodes.find((n) => n.status === 'ready')!;
+    recordBracketResult(db, tid, ready.id, ready.p1!, ps[0]!);
+    expect(reseedBracket(db, tid, ps).status).toBe('has_results');
+  });
+
+  it('S1: a WALKOVER (status=done, NULL match_id) also locks reseed', () => {
+    const db = freshDb();
+    const ps = seedPlayers(db, 8);
+    const tid = makeTournament(db, ps[0]!);
+    createBracket(db, tid, ps);
+    const ready = loadBracket(db, tid).nodes.find((n) => n.status === 'ready')!;
+    recordWalkover(db, tid, ready.id, ready.p1!); // no match row, status done
+    expect(reseedBracket(db, tid, ps).status).toBe('has_results');
   });
 
   it('rejects double-create and bad reports', () => {

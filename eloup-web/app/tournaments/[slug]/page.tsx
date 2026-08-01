@@ -16,6 +16,7 @@ import { InviteCard } from '@/components/InviteCard';
 import { MemberRow } from '@/components/MemberRow';
 import { Bracket } from '@/components/Bracket';
 import { CreateBracketButton } from '@/components/CreateBracketButton';
+import { ShuffleBracketButton } from '@/components/ShuffleBracketButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -42,6 +43,8 @@ export default async function TournamentDetailPage({
 
   const hasBracket = bracketExists(handle, tournament.id);
   const bracketNodes = hasBracket ? loadBracket(handle, tournament.id).nodes : [];
+  // A result reported (played or walkover) locks the draw — no more shuffling.
+  const bracketStarted = bracketNodes.some((n) => n.status === 'done');
   const nameById = new Map(members.map((m) => [m.player_id, m.display_name]));
   const nameOf = (id: string) => nameById.get(id) ?? '?';
 
@@ -72,18 +75,21 @@ export default async function TournamentDetailPage({
         <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Bracket</h2>
         {hasBracket ? (
           <div className="mt-2">
-            <Bracket
-              nodes={bracketNodes}
-              nameOf={nameOf}
-              slug={tournament.slug}
-              viewerIsAdmin={viewerIsAdmin}
-            />
+            {viewerIsAdmin && !bracketStarted && <ShuffleBracketButton slug={tournament.slug} />}
+            <div className="mt-2">
+              <Bracket
+                nodes={bracketNodes}
+                nameOf={nameOf}
+                slug={tournament.slug}
+                viewerIsAdmin={viewerIsAdmin}
+              />
+            </div>
           </div>
         ) : viewerIsAdmin ? (
           <div className="mt-2">
             <p className="text-sm text-muted-foreground">
-              No bracket yet. Generate a double-elimination bracket from the current members
-              (seeded by ELO).
+              No bracket yet. Generate a double-elimination bracket from the current members with a
+              random draw (reshuffle until the first result).
             </p>
             <CreateBracketButton slug={tournament.slug} memberCount={members.length} />
           </div>
