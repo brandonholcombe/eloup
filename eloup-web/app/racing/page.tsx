@@ -3,12 +3,25 @@ import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { getTrackBySlug, listRaces, listTracks } from '@/lib/db/rc';
 import { canUploadRaceResults } from '@/lib/permissions';
-import { formatRecordedDate } from '@/lib/rc/datetime';
+import { formatRecordedDate, formatRecordedDateOnly } from '@/lib/rc/datetime';
 import { TrackFilter } from '@/components/TrackFilter';
 
 export const dynamic = 'force-dynamic';
 
 type Search = { track?: string };
+
+// Group already-date-sorted races into consecutive same-day buckets, preserving
+// order. Returns [dayLabel, races][] for date-subheadered rendering (UX2 2d).
+function groupByDay<T extends { race_started_at: string }>(races: T[]): [string, T[]][] {
+  const groups: [string, T[]][] = [];
+  for (const r of races) {
+    const day = formatRecordedDateOnly(r.race_started_at);
+    const last = groups[groups.length - 1];
+    if (last && last[0] === day) last[1].push(r);
+    else groups.push([day, [r]]);
+  }
+  return groups;
+}
 
 export default async function RacingIndexPage({
   searchParams,
@@ -66,38 +79,46 @@ export default async function RacingIndexPage({
           )}
         </div>
       ) : (
-        <ul className="mt-4 space-y-2">
-          {races.map((r) => (
-            <li
-              key={r.id}
-              className="rounded-md border border-border bg-card px-3 py-3"
-            >
-              <Link href={`/racing/${r.id}`} className="block">
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="text-sm font-medium text-slate-100">
-                    {r.race_name ?? r.race_kind}
-                  </span>
-                  <time className="font-mono text-xs text-slate-400">
-                    {formatRecordedDate(r.race_started_at)}
-                  </time>
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
-                  <span>{r.track_name}</span>
-                  <span className="text-muted-foreground">·</span>
-                  <span className="uppercase tracking-wide text-muted-foreground">{r.race_kind}</span>
-                  <span className="text-muted-foreground">·</span>
-                  <span>{r.driver_count} drivers</span>
-                  {r.winner_display_name && (
-                    <>
-                      <span className="text-muted-foreground">·</span>
-                      <span className="text-emerald-400">🏁 {r.winner_display_name}</span>
-                    </>
-                  )}
-                </div>
-              </Link>
-            </li>
+        <div className="mt-4 space-y-5">
+          {groupByDay(races).map(([day, dayRaces]) => (
+            <section key={day}>
+              <h2 className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {day}
+              </h2>
+              <ul className="space-y-2">
+                {dayRaces.map((r) => (
+                  <li key={r.id} className="rounded-md border border-border bg-card px-3 py-3">
+                    <Link href={`/racing/${r.id}`} className="block">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="text-sm font-medium text-slate-100">
+                          {r.race_name ?? r.race_kind}
+                        </span>
+                        <time className="font-mono text-xs text-muted-foreground">
+                          {formatRecordedDate(r.race_started_at)}
+                        </time>
+                      </div>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300">
+                        <span>{r.track_name}</span>
+                        <span className="text-muted-foreground">·</span>
+                        <span className="uppercase tracking-wide text-muted-foreground">
+                          {r.race_kind}
+                        </span>
+                        <span className="text-muted-foreground">·</span>
+                        <span>{r.driver_count} drivers</span>
+                        {r.winner_display_name && (
+                          <>
+                            <span className="text-muted-foreground">·</span>
+                            <span className="text-emerald-400">🏁 {r.winner_display_name}</span>
+                          </>
+                        )}
+                      </div>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
     </main>
   );

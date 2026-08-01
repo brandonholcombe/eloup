@@ -1,7 +1,23 @@
 # UX2 — Screen redesign: contrast, component adoption, flows, polish
 
 ## Author: claude-opus-4.8-ux2-implementer
-## Status: In Progress
+## Status: Complete
+
+## Phase 2 COMPLETE (2026-07-31)
+
+- **2a** ✅ contrast bump, Card `asChild`, Button `warning`, h-tap link centering (live).
+- **2b** ✅ 1v1 one-tap match entry, confirm banner, a11y (live).
+- **2c** ✅ top-3 medals + win/loss coloring + pluralization (live); **stretch:**
+  **"your rank" affordance** — when the signed-in viewer is outside the visible
+  top-50, a blue-bordered "You · #N of M" row pins their position; viewer's row
+  highlighted `(you)` when in view. New `overallPlayerRank`/`gamePlayerRank`
+  queries. Verified locally (50 rows + "You · #55 of 55"). *Profile stat-tile
+  redesign intentionally NOT done — the big-number layout already reads well;
+  low delight-per-effort.*
+- **2d** ✅ racing list grouped by day with date subheaders (`groupByDay`);
+  verified on the prod deploy (local seed has no RC data).
+
+Phase 3 (data-viz) → 4 (motion) → 5 (a11y/PWA) remain in the umbrella plan.
 
 ## Reviewer findings folded (2026-07-26)
 

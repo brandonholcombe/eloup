@@ -65,6 +65,41 @@ export function leaderboardForGame(db: Database.Database, gameId: string, limit 
     .all(gameId, limit) as LeaderRow[];
 }
 
+export type PlayerRank = { rank: number; total: number; current_rating: number };
+
+// 1-based competition rank (rank = 1 + players strictly above), matching the
+// leaderboard's `ORDER BY current_rating DESC`. null if the player is unranked
+// in that pool. Used for the "your rank" affordance when outside the top-N.
+export function overallPlayerRank(db: Database.Database, playerId: string): PlayerRank | null {
+  const me = db
+    .prepare(`SELECT current_rating FROM overall_ratings WHERE player_id = ?`)
+    .get(playerId) as { current_rating: number } | undefined;
+  if (!me) return null;
+  const { c: higher } = db
+    .prepare(`SELECT count(*) AS c FROM overall_ratings WHERE current_rating > ?`)
+    .get(me.current_rating) as { c: number };
+  const { c: total } = db.prepare(`SELECT count(*) AS c FROM overall_ratings`).get() as { c: number };
+  return { rank: higher + 1, total, current_rating: me.current_rating };
+}
+
+export function gamePlayerRank(
+  db: Database.Database,
+  gameId: string,
+  playerId: string,
+): PlayerRank | null {
+  const me = db
+    .prepare(`SELECT current_rating FROM ratings WHERE game_id = ? AND player_id = ?`)
+    .get(gameId, playerId) as { current_rating: number } | undefined;
+  if (!me) return null;
+  const { c: higher } = db
+    .prepare(`SELECT count(*) AS c FROM ratings WHERE game_id = ? AND current_rating > ?`)
+    .get(gameId, me.current_rating) as { c: number };
+  const { c: total } = db
+    .prepare(`SELECT count(*) AS c FROM ratings WHERE game_id = ?`)
+    .get(gameId) as { c: number };
+  return { rank: higher + 1, total, current_rating: me.current_rating };
+}
+
 export function overallLeaderboard(db: Database.Database, limit = 50): LeaderRow[] {
   return db
     .prepare(
