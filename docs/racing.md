@@ -109,3 +109,18 @@ recomputes placement from `source_blob` in SQL, it needs to re-apply
 the same `minLapTime` threshold to produce identical results. An
 `0004_rc_recompute.sql` migration that extracts
 `min_lap_time_ms` to `rc_races` is the natural prep step.
+
+## RC truck cup (M8b, 2026-08-01)
+
+A points-series championship over imported races (`rc_cups`, `rc_cup_races` in
+`0010_rc_cups.sql`). Still RC-native + display-only — **no ELO, no `matches`
+rows**. An RC-admin (`canUploadRaceResults`) creates a cup and assigns imported
+races to it (they choose which count — practice/qualif/race is their call).
+Standings = `Σ points_scheme[placement-1]` over the cup's races, aggregated per
+`driver_id` (`rc_drivers.player_id` is nullable, so keying on player would drop
+unlinked drivers), read from `rc_race_drivers.placement` (which already reflects
+penalty/void corrections via `recomputePlacements`). Scoring is a pure function
+`scoreCup(rows, scheme)` (`lib/rc/cup.ts`), unit-tested; ranked points→wins→
+best-finish→name→driver_id. Points scheme is a per-cup editable JSON int array
+(default `[10,8,6,5,4,3,2,1]`). Known v1 limit: a driver split across imports
+(dual Lap Monitor UUIDs) shows as two rows — no merge UI.

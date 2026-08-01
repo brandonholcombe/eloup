@@ -40,6 +40,14 @@ Independent review at `Agents/Review-reports/m8-tournament-formats-review.md`
   the node (O1); same-pair double ELO update is intended, not a bug (O2); mid-event
   roster change unsupported — admin re-seeds before any result (O3).
 
+**S6 deviation recorded (2026-08-01):** 8b (RC cup) was built **RC-native** under
+`/racing` (`rc_cups`/`rc_cup_races`), NOT `tournaments.format='points_series'` as
+originally sketched. Reason: RC is driver-based + display-only + no ELO, so the
+`tournaments` table (player/match/ELO based) is a mismatch — the umbrella review
+endorsed this. So of the three formats: 8c Smash = `tournaments` double_elim
+(shipped); 8b RC cup = RC-native (shipped); 8a board-game round-robin = still
+hand-run per user.
+
 --- original plan below (8b/8a details now lower priority) ---
 
 ## 1. Concrete purpose (this is a real event)

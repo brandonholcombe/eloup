@@ -114,7 +114,7 @@
       "interlocks": {}
     },
     "racing": {
-      "description": "RC-car racing dashboard backed by Lap Monitor JSON exports. Display-only in R1: per-driver lap chart, per-track best-lap leaderboards, driver profiles. Driver identity is decoupled from players via a stable lap_monitor_driver_uuid with an optional players.id link. ELO integration is deferred to R2.",
+      "description": "RC-car racing dashboard backed by Lap Monitor JSON exports. Display-only in R1: per-driver lap chart, per-track best-lap leaderboards, driver profiles. Driver identity is decoupled from players via a stable lap_monitor_driver_uuid with an optional players.id link. ELO integration is deferred to R2. M8b adds an RC-native points-series CUP (rc_cups/rc_cup_races): an admin assigns imported races to a cup and standings aggregate points-by-finish (rc_race_drivers.placement) keyed on driver_id — still display-only, no ELO, no matches rows.",
       "docs": ["docs/racing.md"],
       "properties": {
         "source": "lap_monitor",
@@ -124,7 +124,8 @@
         "chart_strategy": "svg_inline",
         "elo_integrated": false,
         "upload_role": "global_admin",
-        "anonymous_view": true
+        "anonymous_view": true,
+        "cup_support": "points_series"
       },
       "interlocks": {}
     },
