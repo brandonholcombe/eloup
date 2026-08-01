@@ -100,7 +100,10 @@ export function confirmRow(
   return tx.immediate();
 }
 
-function applyEloUpdate(
+// Exported for the bracket layer (M8c recordBracketResult): runs the ELO update
+// for a match whose participants already have placements + are confirmed. MUST
+// be called inside an existing db.transaction() — it does not open its own.
+export function applyEloUpdate(
   db: Database.Database,
   matchId: string,
   nowIso: () => string,
