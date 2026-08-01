@@ -42,6 +42,29 @@ Join order matters: the SQL anchors `matches m` as the outer LEFT JOIN (filtered
 - `consumeInvite(db, token, playerId)` — partial-index lookup; on hit, INSERT-OR-IGNORE into `tournament_members`. Returns a tagged union: `{status: 'joined' | 'already_member', tournament}` or `{status: 'invalid_token'}` (revoked/unknown). The `/tournaments/join/[token]` route handler maps `'invalid_token'` to HTTP 410 and the join cases to a 303 redirect to `/tournaments/[slug]`.
 - `revokeInvite(db, tournamentId)` — sets `invite_token = NULL`. Rotating = re-issuing.
 
+## Double-elimination brackets (M8c, 2026-08-01)
+
+For the bachelor party's Smash Bros event. `tournaments.format = 'double_elim'`
+opts a tournament into a bracket (default stays the M5 named-group).
+
+- **Engine** (`lib/bracket/engine.ts`) — pure, in-memory, no DB, proven by golden
+  invariant tests (`tests/unit/bracket-engine.test.ts`): fixed power-of-2 draw
+  (16 for 9-16 players), standard seed order, WB/LB/GF routing. The winners-final
+  loser drops to the losers final (LR6); the WB→LB drop cross alternates
+  reverse/straight per round to avoid immediate rematches. A void-aware
+  fixed-point resolver auto-advances byes/walkovers and recurses.
+- **Persistence** (`0009_bracket.sql`, `lib/db/bracket.ts`) — `bracket_matches`
+  mirrors the engine node. `createBracket` seeds by overall ELO. Each played
+  result is **admin-authoritative**: `recordBracketResult` creates a real Smash
+  (`game_smash`, 1v1) `matches` row (winner placement 1) and runs the shared ELO
+  update in one transaction, then advances. `recordWalkover` advances a no-show
+  with no match/ELO.
+- **UI** — `/tournaments/[slug]` renders round-by-round match lists (not a tree);
+  admins generate the bracket and report winners. Single grand final (no bracket
+  reset in v1); mid-event roster changes unsupported (regenerate before any
+  result). RC cup (points series) + board-game round-robin (8b/8a) are run by
+  hand for the party.
+
 ## Out of scope (M5)
 
 - Bracket progression, seeding, bye handling.

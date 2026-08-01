@@ -1,7 +1,25 @@
 # M8c — Smash Bros double-elimination bracket
 
 ## Author: claude-opus-4.8-m8c-implementer
-## Status: In Progress
+## Status: Complete
+
+## Outcome (2026-08-01) — SHIPPED, verified end-to-end
+
+The flagship Smash double-elim bracket is built and works on a phone.
+- **Engine** (`lib/bracket/engine.ts`) — pure, 15 golden invariant tests prove:
+  2N-2 counts, every non-champion out with exactly 2 losses, bye cascade
+  terminates for 9/11/13/15 players, WR-final loser→LR6 (B1), no WB rematch in
+  first LB match (B3 cross). All reviewer blocking bugs fixed + tested.
+- **Persistence + ELO** (`0009_bracket.sql`, `lib/db/bracket.ts`) — 5 integration
+  tests: create/round-trip, full tournament→champion + ELO fired, walkover no-ELO,
+  rejects double-create/bad reports. `recordBracketResult` composes the exported
+  `applyEloUpdate` in one transaction (S5).
+- **API + UI** — generate (seeded by ELO), round-by-round match lists, admin
+  winner-report + walkover, champion banner. Verified live in the local harness
+  (13-member → 16-draw with byes auto-advanced; report POST 200 advances).
+- **Alignment** — `tournaments` symbol + `docs/tournaments.md` updated (stale "no
+  brackets" phrase fixed); `align.py lock` re-run (root `aec87586`, aligned).
+- vitest 308 → 328. Deferred (v1, stated): grand-final reset, mid-event roster.
 
 ## Reviewer findings folded (2026-08-01)
 

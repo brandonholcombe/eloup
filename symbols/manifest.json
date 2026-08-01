@@ -86,11 +86,11 @@
       }
     },
     "tournaments": {
-      "description": "Flat named groupings of matches with per-tournament delegated admins. Format is a single named-group model (no brackets in M5). Rating pool is shared with casual matches (same per-game and overall ELO tables). Invites are a single revocable shared-link token stored on the row; rotation = re-issue, revoke = NULL. The creator is a permanent super-admin per tournament (only a global_admin can demote them). tournament_admin is per-tournament authority derived from the tournament_admins table, not from players.role.",
+      "description": "Named groupings of matches with per-tournament delegated admins. tournaments.format is per-tournament: the M5 named-group model, or (M8c) a double-elimination bracket. The bracket is a fixed power-of-2 draw (16 for 9-16 players) generated in-app (lib/bracket/engine.ts, proven by golden invariant tests), seeded by overall ELO, with byes auto-advanced; each played bracket result is admin-authoritative and creates a real Smash matches row feeding shared ELO. Rating pool is shared with casual matches (same per-game and overall ELO tables). Invites are a single revocable shared-link token stored on the row; rotation = re-issue, revoke = NULL. The creator is a permanent super-admin per tournament (only a global_admin can demote them). tournament_admin is per-tournament authority derived from the tournament_admins table, not from players.role.",
       "docs": ["docs/tournaments.md"],
       "properties": {
         "has_admin_role": true,
-        "format": "named_group",
+        "format": "named_group_or_double_elim",
         "rating_pool": "shared",
         "invite_model": "single_shared_link",
         "creator_demotable": false
