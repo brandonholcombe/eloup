@@ -45,6 +45,21 @@ function rowToNode(r: Row): BracketNode {
   };
 }
 
+/** Tournament members ordered by overall ELO desc (default bracket seeding). */
+export function seedMembersByElo(db: Database.Database, tournamentId: string): string[] {
+  return (
+    db
+      .prepare(
+        `SELECT tm.player_id
+           FROM tournament_members tm
+           LEFT JOIN overall_ratings o ON o.player_id = tm.player_id
+          WHERE tm.tournament_id = ?
+          ORDER BY COALESCE(o.current_rating, 1200) DESC, tm.player_id`,
+      )
+      .all(tournamentId) as { player_id: string }[]
+  ).map((r) => r.player_id);
+}
+
 export function bracketExists(db: Database.Database, tournamentId: string): boolean {
   const r = db
     .prepare(`SELECT 1 FROM bracket_matches WHERE tournament_id = ? LIMIT 1`)

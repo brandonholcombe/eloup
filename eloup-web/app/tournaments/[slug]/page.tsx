@@ -10,9 +10,12 @@ import {
 } from '@/lib/tournaments';
 import { getStandings } from '@/lib/tournament-standings';
 import { isTournamentAdmin, isTournamentMember } from '@/lib/permissions';
+import { bracketExists, loadBracket } from '@/lib/db/bracket';
 import { TournamentStandings } from '@/components/TournamentStandings';
 import { InviteCard } from '@/components/InviteCard';
 import { MemberRow } from '@/components/MemberRow';
+import { Bracket } from '@/components/Bracket';
+import { CreateBracketButton } from '@/components/CreateBracketButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,6 +40,11 @@ export default async function TournamentDetailPage({
   const standings = getStandings(handle, tournament.id);
   const recent = listRecentMatches(handle, tournament.id, 5);
 
+  const hasBracket = bracketExists(handle, tournament.id);
+  const bracketNodes = hasBracket ? loadBracket(handle, tournament.id).nodes : [];
+  const nameById = new Map(members.map((m) => [m.player_id, m.display_name]));
+  const nameOf = (id: string) => nameById.get(id) ?? '?';
+
   return (
     <main className="p-4">
       <Link href="/tournaments" className="text-sm text-slate-400 hover:text-slate-200">
@@ -59,6 +67,30 @@ export default async function TournamentDetailPage({
           appDomain={env().APP_DOMAIN}
         />
       )}
+
+      <section className="mt-6">
+        <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Bracket</h2>
+        {hasBracket ? (
+          <div className="mt-2">
+            <Bracket
+              nodes={bracketNodes}
+              nameOf={nameOf}
+              slug={tournament.slug}
+              viewerIsAdmin={viewerIsAdmin}
+            />
+          </div>
+        ) : viewerIsAdmin ? (
+          <div className="mt-2">
+            <p className="text-sm text-muted-foreground">
+              No bracket yet. Generate a double-elimination bracket from the current members
+              (seeded by ELO).
+            </p>
+            <CreateBracketButton slug={tournament.slug} memberCount={members.length} />
+          </div>
+        ) : (
+          <p className="mt-2 text-sm text-muted-foreground">No bracket yet.</p>
+        )}
+      </section>
 
       <section className="mt-6">
         <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Standings</h2>
