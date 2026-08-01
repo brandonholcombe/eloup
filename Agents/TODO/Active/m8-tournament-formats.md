@@ -1,11 +1,46 @@
 # M8 — Tournament formats for the bachelor party (bracket/cup/round-robin)
 
 ## Author: claude-opus-4.8-m8-planner
-## Status: Not Started
+## Status: In Progress
 
-> Umbrella design doc for the "bracket builder." Promoted from
-> `Agents/Ideas/tournament-brackets.md`. Needs an independent review before
-> implementation; each sub-part (8a/8b/8c) then gets built + reviewed in turn.
+> Umbrella design doc for the "bracket builder." Each sub-part gets its own task
+> doc + review + build.
+
+## Reprioritization (user, 2026-07-31) + reviewer findings folded
+
+**User: build the Smash Bros double-elim bracket (8c) FIRST. The RC cup (8b) and
+board-game round-robin (8a) are OPTIONAL — can be run by hand if needed.** So 8c
+is the critical path and the only committed deliverable; 8a/8b are nice-to-have.
+
+Independent review at `Agents/Review-reports/m8-tournament-formats-review.md`
+(Reviewer: `claude-opus-4.8-m8-reviewer`): **Approve-with-changes** — 2 blocking,
+5 should-fix. Umbrella direction sound. Corrections:
+- **Decisions locked:** Q-M8-1 → **shared ELO for 8a/8c** (each match is a real
+  `matches` row → per-game + overall ELO); **RC cup 8b has NO ELO** — it's
+  standings-only over `rc_race_drivers.placement` (RC is display-only; B1). Q-M8-4
+  → **Smash-first**. Q-M8-5 → **key cup standings on `driver_id`**, display linked
+  player (`rc_drivers.player_id` is nullable; S3).
+- **B2 (critical for 8c):** the `bracket_matches` model as sketched CANNOT hold a
+  slot's resolved occupants — needs `p1_player_id`/`p2_player_id` columns that
+  advancement writes into (playable = both non-NULL; bye = one player + a BYE
+  sentinel). Corrected in the 8c sub-task doc below.
+- **S1 (8c):** bye propagation must cascade into the **losers** bracket too — a
+  winners-R1 bye has a winner but no loser, so the losers slot expecting that
+  loser is itself a bye that auto-advances. With 7 byes in a 9-player 16-draw this
+  is the common case; bake it into the fixed template.
+- **8b corrections (deferred with 8b):** repoint to `rc_race_drivers.placement` /
+  `standingsForRace()` (not `rc_drivers`); key on driver_id (S2/S3).
+- **8a corrections (deferred with 8a):** pools need NET-NEW pool-aware standings
+  code (existing `getStandings` is tournament-wide, no pool/loss column, join
+  order load-bearing; S4).
+- **S5:** next migration is **`0009_*`**; both `matches`-backed formats (Smash,
+  board game) need a `games` row (`game_id` NOT NULL, format CHECK `1v1/ffa/team`
+  → Smash=`1v1`); RC cup needs none.
+- **Notes:** grand-finals reset deferred but state it as a shown rule + pre-allocate
+  the node (O1); same-pair double ELO update is intended, not a bug (O2); mid-event
+  roster change unsupported — admin re-seeds before any result (O3).
+
+--- original plan below (8b/8a details now lower priority) ---
 
 ## 1. Concrete purpose (this is a real event)
 
