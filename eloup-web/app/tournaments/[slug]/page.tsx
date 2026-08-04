@@ -14,9 +14,8 @@ import { bracketExists, loadBracket } from '@/lib/db/bracket';
 import { TournamentStandings } from '@/components/TournamentStandings';
 import { InviteCard } from '@/components/InviteCard';
 import { MemberRow } from '@/components/MemberRow';
-import { Bracket } from '@/components/Bracket';
 import { CreateBracketButton } from '@/components/CreateBracketButton';
-import { ShuffleBracketButton } from '@/components/ShuffleBracketButton';
+import { Card } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,8 +42,7 @@ export default async function TournamentDetailPage({
 
   const hasBracket = bracketExists(handle, tournament.id);
   const bracketNodes = hasBracket ? loadBracket(handle, tournament.id).nodes : [];
-  // A result reported (played or walkover) locks the draw — no more shuffling.
-  const bracketStarted = bracketNodes.some((n) => n.status === 'done');
+  const champion = bracketNodes.find((n) => n.id === 'grand-R1-M1')?.winner ?? null;
   const nameById = new Map(members.map((m) => [m.player_id, m.display_name]));
   const nameOf = (id: string) => nameById.get(id) ?? '?';
 
@@ -74,17 +72,18 @@ export default async function TournamentDetailPage({
       <section className="mt-6">
         <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Bracket</h2>
         {hasBracket ? (
-          <div className="mt-2">
-            {viewerIsAdmin && !bracketStarted && <ShuffleBracketButton slug={tournament.slug} />}
-            <div className="mt-2">
-              <Bracket
-                nodes={bracketNodes}
-                nameOf={nameOf}
-                slug={tournament.slug}
-                viewerIsAdmin={viewerIsAdmin}
-              />
-            </div>
-          </div>
+          <Link href={`/tournaments/${tournament.slug}/bracket`} className="mt-2 block">
+            <Card className="flex items-center justify-between p-3">
+              <span className="text-sm">
+                {champion ? (
+                  <>🏆 Champion: <span className="font-medium">{nameOf(champion)}</span></>
+                ) : (
+                  'Double-elimination bracket · in progress'
+                )}
+              </span>
+              <span className="text-sm text-muted-foreground">View bracket →</span>
+            </Card>
+          </Link>
         ) : viewerIsAdmin ? (
           <div className="mt-2">
             <p className="text-sm text-muted-foreground">

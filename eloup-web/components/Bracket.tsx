@@ -44,9 +44,10 @@ export function Bracket({
       )}
       <p className="mb-2 text-xs text-muted-foreground">
         Double elimination · single grand final. Solid lines = winners advance,
-        dashed = losers drop. Scroll →
+        dashed = losers drop. Pan to explore ↔
       </p>
-      <div className="overflow-auto rounded-md border border-border">
+      {/* Fixed-height canvas that pans in both directions (its own page now). */}
+      <div className="overflow-auto rounded-md border border-border h-[calc(100dvh-13rem)] bg-slate-950">
         <div className="relative" style={{ width: L.width, height: L.height }}>
           {/* Connector layer — MUST be pointer-events:none (B2) so cards stay tappable. */}
           <svg
