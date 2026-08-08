@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { rankMedal } from '@/lib/rank';
+import { listAllTournaments } from '@/lib/tournaments';
+import { TournamentFilter } from '@/components/TournamentFilter';
 import {
   gamePlayerRank,
   leaderboardForGame,
@@ -14,14 +16,14 @@ import {
 
 export const dynamic = 'force-dynamic';
 
-type Search = { tab?: string };
+type Search = { tab?: string; tournament?: string };
 
 export default async function LeaderboardsPage({
   searchParams,
 }: {
   searchParams: Promise<Search>;
 }) {
-  const { tab } = await searchParams;
+  const { tab, tournament } = await searchParams;
   const session = await auth();
   const viewerId = session?.user?.id ?? null;
   const handle = db();
@@ -29,20 +31,26 @@ export default async function LeaderboardsPage({
   const activeTab = tab && (tab === 'overall' || games.some((g) => g.slug === tab)) ? tab : 'overall';
   const activeGame = activeTab === 'overall' ? null : games.find((x) => x.slug === activeTab) ?? null;
 
+  // Tournament filter (restrict to members). Resolve slug→id; fall back to all.
+  const tournaments = listAllTournaments(handle);
+  const activeTournament = tournament ? tournaments.find((t) => t.slug === tournament) ?? null : null;
+  const tid = activeTournament?.id ?? null;
+
   const rows: LeaderRow[] =
     activeTab === 'overall'
-      ? overallLeaderboard(handle, 50)
+      ? overallLeaderboard(handle, 50, tid)
       : activeGame
-        ? leaderboardForGame(handle, activeGame.id, 50)
+        ? leaderboardForGame(handle, activeGame.id, 50, tid)
         : [];
 
   // "Your rank" — only surfaced when the viewer is ranked but NOT already in the
-  // visible top-50 rows (otherwise their highlighted row is enough).
+  // visible top-50 rows (otherwise their highlighted row is enough). Respects the
+  // tournament filter (null when the viewer isn't a member of the selected one).
   const viewerRank: PlayerRank | null = viewerId
     ? activeTab === 'overall'
-      ? overallPlayerRank(handle, viewerId)
+      ? overallPlayerRank(handle, viewerId, tid)
       : activeGame
-        ? gamePlayerRank(handle, activeGame.id, viewerId)
+        ? gamePlayerRank(handle, activeGame.id, viewerId, tid)
         : null
     : null;
   const viewerInView = !!viewerId && rows.some((r) => r.player_id === viewerId);
@@ -58,6 +66,17 @@ export default async function LeaderboardsPage({
           <TabLink key={g.id} slug={g.slug} label={g.name} active={activeTab === g.slug} />
         ))}
       </nav>
+
+      {tournaments.length > 0 && (
+        <div className="mt-2">
+          <TournamentFilter
+            basePath="/leaderboards"
+            tournaments={tournaments}
+            active={activeTournament?.slug ?? null}
+            allLabel="All players"
+          />
+        </div>
+      )}
 
       {rows.length === 0 ? (
         <p className="mt-6 text-slate-400">No ratings yet. Log a match to get started.</p>

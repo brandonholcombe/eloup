@@ -51,34 +51,73 @@ export type LeaderRow = {
   games_played?: number;
 };
 
-export function leaderboardForGame(db: Database.Database, gameId: string, limit = 50): LeaderRow[] {
+// Optional tournament filter: restrict to that tournament's members (H10 A).
+const memberSub = (col: string) =>
+  `${col} IN (SELECT player_id FROM tournament_members WHERE tournament_id = @tid)`;
+
+export function leaderboardForGame(
+  db: Database.Database,
+  gameId: string,
+  limit = 50,
+  tournamentId?: string | null,
+): LeaderRow[] {
+  const params: Record<string, unknown> = { gid: gameId, limit };
+  let clause = '';
+  if (tournamentId) {
+    clause = `AND ${memberSub('r.player_id')}`;
+    params.tid = tournamentId;
+  }
   return db
     .prepare(
       `SELECT p.id AS player_id, p.discord_handle, p.display_name, p.avatar_url,
               r.current_rating, r.games_played
          FROM ratings r
          JOIN players p ON p.id = r.player_id
-        WHERE r.game_id = ?
+        WHERE r.game_id = @gid ${clause}
         ORDER BY r.current_rating DESC
-        LIMIT ?`,
+        LIMIT @limit`,
     )
-    .all(gameId, limit) as LeaderRow[];
+    .all(params) as LeaderRow[];
 }
 
 export type PlayerRank = { rank: number; total: number; current_rating: number };
 
-// 1-based competition rank (rank = 1 + players strictly above), matching the
-// leaderboard's `ORDER BY current_rating DESC`. null if the player is unranked
-// in that pool. Used for the "your rank" affordance when outside the top-N.
-export function overallPlayerRank(db: Database.Database, playerId: string): PlayerRank | null {
+// 1-based competition rank (rank = 1 + players strictly above). null if the
+// player is unranked in that pool — including when a tournament filter is set and
+// the player is not a member (S2), so the "your rank" affordance hides.
+export function overallPlayerRank(
+  db: Database.Database,
+  playerId: string,
+  tournamentId?: string | null,
+): PlayerRank | null {
+  const mParams: Record<string, unknown> = { pid: playerId };
+  let mClause = '';
+  if (tournamentId) {
+    mClause = `AND ${memberSub('player_id')}`;
+    mParams.tid = tournamentId;
+  }
   const me = db
-    .prepare(`SELECT current_rating FROM overall_ratings WHERE player_id = ?`)
-    .get(playerId) as { current_rating: number } | undefined;
-  if (!me) return null;
+    .prepare(`SELECT current_rating FROM overall_ratings WHERE player_id = @pid ${mClause}`)
+    .get(mParams) as { current_rating: number } | undefined;
+  if (!me) return null; // unranked OR (filtered) not a member
+  const hParams: Record<string, unknown> = { r: me.current_rating };
+  let hClause = '';
+  if (tournamentId) {
+    hClause = `AND ${memberSub('player_id')}`;
+    hParams.tid = tournamentId;
+  }
   const { c: higher } = db
-    .prepare(`SELECT count(*) AS c FROM overall_ratings WHERE current_rating > ?`)
-    .get(me.current_rating) as { c: number };
-  const { c: total } = db.prepare(`SELECT count(*) AS c FROM overall_ratings`).get() as { c: number };
+    .prepare(`SELECT count(*) AS c FROM overall_ratings WHERE current_rating > @r ${hClause}`)
+    .get(hParams) as { c: number };
+  const tParams: Record<string, unknown> = {};
+  let tClause = '';
+  if (tournamentId) {
+    tClause = `WHERE ${memberSub('player_id')}`;
+    tParams.tid = tournamentId;
+  }
+  const { c: total } = db
+    .prepare(`SELECT count(*) AS c FROM overall_ratings ${tClause}`)
+    .get(tParams) as { c: number };
   return { rank: higher + 1, total, current_rating: me.current_rating };
 }
 
@@ -86,31 +125,52 @@ export function gamePlayerRank(
   db: Database.Database,
   gameId: string,
   playerId: string,
+  tournamentId?: string | null,
 ): PlayerRank | null {
+  const memberAnd = tournamentId ? `AND ${memberSub('player_id')}` : '';
   const me = db
-    .prepare(`SELECT current_rating FROM ratings WHERE game_id = ? AND player_id = ?`)
-    .get(gameId, playerId) as { current_rating: number } | undefined;
+    .prepare(
+      `SELECT current_rating FROM ratings WHERE game_id = @gid AND player_id = @pid ${memberAnd}`,
+    )
+    .get({ gid: gameId, pid: playerId, ...(tournamentId ? { tid: tournamentId } : {}) }) as
+    | { current_rating: number }
+    | undefined;
   if (!me) return null;
   const { c: higher } = db
-    .prepare(`SELECT count(*) AS c FROM ratings WHERE game_id = ? AND current_rating > ?`)
-    .get(gameId, me.current_rating) as { c: number };
+    .prepare(
+      `SELECT count(*) AS c FROM ratings WHERE game_id = @gid AND current_rating > @r ${memberAnd}`,
+    )
+    .get({ gid: gameId, r: me.current_rating, ...(tournamentId ? { tid: tournamentId } : {}) }) as {
+    c: number;
+  };
   const { c: total } = db
-    .prepare(`SELECT count(*) AS c FROM ratings WHERE game_id = ?`)
-    .get(gameId) as { c: number };
+    .prepare(`SELECT count(*) AS c FROM ratings WHERE game_id = @gid ${memberAnd}`)
+    .get({ gid: gameId, ...(tournamentId ? { tid: tournamentId } : {}) }) as { c: number };
   return { rank: higher + 1, total, current_rating: me.current_rating };
 }
 
-export function overallLeaderboard(db: Database.Database, limit = 50): LeaderRow[] {
+export function overallLeaderboard(
+  db: Database.Database,
+  limit = 50,
+  tournamentId?: string | null,
+): LeaderRow[] {
+  const params: Record<string, unknown> = { limit };
+  let clause = '';
+  if (tournamentId) {
+    clause = `WHERE ${memberSub('o.player_id')}`;
+    params.tid = tournamentId;
+  }
   return db
     .prepare(
       `SELECT p.id AS player_id, p.discord_handle, p.display_name, p.avatar_url,
               o.current_rating
          FROM overall_ratings o
          JOIN players p ON p.id = o.player_id
+        ${clause}
         ORDER BY o.current_rating DESC
-        LIMIT ?`,
+        LIMIT @limit`,
     )
-    .all(limit) as LeaderRow[];
+    .all(params) as LeaderRow[];
 }
 
 export type PlayerSearchHit = {

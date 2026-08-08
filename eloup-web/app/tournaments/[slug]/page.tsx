@@ -15,6 +15,7 @@ import { TournamentStandings } from '@/components/TournamentStandings';
 import { InviteCard } from '@/components/InviteCard';
 import { MemberRow } from '@/components/MemberRow';
 import { CreateBracketButton } from '@/components/CreateBracketButton';
+import { DeleteTournamentButton } from '@/components/DeleteTournamentButton';
 import { Card } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
@@ -145,6 +146,17 @@ export default async function TournamentDetailPage({
           ))}
         </ul>
       </section>
+
+      {viewerIsAdmin && (
+        <section className="mt-8">
+          <h2 className="text-sm uppercase tracking-wide text-red-400/70">Danger zone</h2>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Deletes this tournament and all its matches + bracket, and reverses the ELO its
+            matches applied.
+          </p>
+          <DeleteTournamentButton slug={tournament.slug} name={tournament.name} />
+        </section>
+      )}
     </main>
   );
 }

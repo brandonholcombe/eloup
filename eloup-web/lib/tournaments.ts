@@ -114,6 +114,13 @@ export function listMyTournaments(
     .all(playerId) as TournamentRow[];
 }
 
+// All tournaments (for the anonymous-visible leaderboard filter).
+export function listAllTournaments(db: Database.Database): TournamentRow[] {
+  return db
+    .prepare(`SELECT * FROM tournaments ORDER BY created_at DESC`)
+    .all() as TournamentRow[];
+}
+
 export function listMembers(
   db: Database.Database,
   tournamentId: string,

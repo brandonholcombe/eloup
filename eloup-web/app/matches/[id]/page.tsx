@@ -7,6 +7,7 @@ import { AdminForceConfirmButton } from '@/components/AdminForceConfirmButton';
 import { canForceConfirmMatch, type SessionPlayer } from '@/lib/permissions';
 import { Card } from '@/components/ui/card';
 import { deltaColor } from '@/lib/result';
+import { DeleteMatchButton } from '@/components/DeleteMatchButton';
 
 export const dynamic = 'force-dynamic';
 
@@ -45,6 +46,14 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
   const canAdminForce =
     match.status === 'pending' &&
     canForceConfirmMatch(handle, sp, { tournament_id: match.tournament_id });
+  // Delete is allowed to the same admins regardless of status (reverses ELO if
+  // confirmed). Bracket-linked matches are blocked server-side.
+  const canAdminDelete = canForceConfirmMatch(handle, sp, {
+    tournament_id: match.tournament_id,
+  });
+  const isBracketMatch = !!handle
+    .prepare(`SELECT 1 FROM bracket_matches WHERE match_id = ?`)
+    .get(id);
   const rows = handle
     .prepare(
       `SELECT mp.player_id, p.display_name, p.discord_handle, mp.team_label, mp.placement,
@@ -113,6 +122,7 @@ export default async function MatchDetailPage({ params }: { params: Promise<{ id
         })}
       </ul>
       {canAdminForce && <AdminForceConfirmButton matchId={match.id} />}
+      {canAdminDelete && !isBracketMatch && <DeleteMatchButton matchId={match.id} />}
     </main>
   );
 }

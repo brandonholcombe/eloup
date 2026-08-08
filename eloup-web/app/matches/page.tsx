@@ -2,6 +2,8 @@ import Link from 'next/link';
 import { auth } from '@/lib/auth';
 import { db } from '@/lib/db/client';
 import { statusColor } from '@/lib/result';
+import { listMyTournaments } from '@/lib/tournaments';
+import { TournamentFilter } from '@/components/TournamentFilter';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,20 +15,35 @@ type Row = {
   created_at: string;
 };
 
-export default async function MatchesPage() {
+type Search = { tournament?: string };
+
+export default async function MatchesPage({ searchParams }: { searchParams: Promise<Search> }) {
   const session = await auth();
   if (!session?.user) return null; // middleware redirects, this is a backstop
+  const { tournament } = await searchParams;
   const playerId = session.user.id;
-  const rows = db()
+  const handle = db();
+
+  // Filter by tournament (viewer's memberships). Resolve slug→id; fall back to all.
+  const myTournaments = listMyTournaments(handle, playerId);
+  const activeTournament = tournament ? myTournaments.find((t) => t.slug === tournament) ?? null : null;
+  const params: Record<string, unknown> = { pid: playerId };
+  let clause = '';
+  if (activeTournament) {
+    clause = 'AND m.tournament_id = @tid';
+    params.tid = activeTournament.id;
+  }
+  const rows = handle
     .prepare(
       `SELECT m.id, g.name AS game_name, m.status, mp.confirmed_at, m.created_at
          FROM matches m
          JOIN games g ON g.id = m.game_id
-         JOIN match_participants mp ON mp.match_id = m.id AND mp.player_id = ?
+         JOIN match_participants mp ON mp.match_id = m.id AND mp.player_id = @pid
+        WHERE 1=1 ${clause}
         ORDER BY m.created_at DESC
         LIMIT 50`,
     )
-    .all(playerId) as Row[];
+    .all(params) as Row[];
 
   const pending = rows.filter((r) => r.status === 'pending' && r.confirmed_at == null);
   const recent = rows.filter((r) => r.status === 'confirmed' || r.confirmed_at != null);
@@ -42,6 +59,17 @@ export default async function MatchesPage() {
           + New
         </Link>
       </div>
+
+      {myTournaments.length > 0 && (
+        <div className="mt-3">
+          <TournamentFilter
+            basePath="/matches"
+            tournaments={myTournaments}
+            active={activeTournament?.slug ?? null}
+            allLabel="All my matches"
+          />
+        </div>
+      )}
 
       <Section title="Awaiting your confirmation" rows={pending} emptyMsg="Nothing pending." />
       <Section title="Recent" rows={recent} emptyMsg="No matches yet." />

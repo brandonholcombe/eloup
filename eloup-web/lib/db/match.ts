@@ -180,7 +180,9 @@ export function applyEloUpdate(
        last_match_id  = excluded.last_match_id`,
   );
   const updateParticipant = db.prepare(
-    `UPDATE match_participants SET rating_before = ?, rating_delta = ?
+    // rating_before/rating_delta are the PER-GAME values; overall_rating_delta
+    // (0011) persists the overall delta so an admin delete can reverse it (H10).
+    `UPDATE match_participants SET rating_before = ?, rating_delta = ?, overall_rating_delta = ?
       WHERE match_id = ? AND player_id = ?`,
   );
 
@@ -192,7 +194,7 @@ export function applyEloUpdate(
     const afterPerGame = beforePerGame + dPerGame;
     const afterOverall = beforeOverall + dOverall;
 
-    updateParticipant.run(beforePerGame, dPerGame, matchId, r.player_id);
+    updateParticipant.run(beforePerGame, dPerGame, dOverall, matchId, r.player_id);
     upsertPerGame.run(r.player_id, game.id, afterPerGame, matchId);
     upsertOverall.run(r.player_id, afterOverall, matchId);
 
