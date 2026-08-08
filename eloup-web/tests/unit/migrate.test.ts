@@ -50,7 +50,7 @@ describe('applyMigrations', () => {
     const versions = db.prepare('SELECT version FROM schema_migrations ORDER BY version').all() as {
       version: number;
     }[];
-    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]);
+    expect(versions.map((v) => v.version)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]);
     // 0011 adds the nullable overall_rating_delta column for ELO-reversing delete.
     const mpCols = db.prepare(`PRAGMA table_info(match_participants)`).all() as {
       name: string;
@@ -59,6 +59,16 @@ describe('applyMigrations', () => {
     const ord = mpCols.find((c) => c.name === 'overall_rating_delta');
     expect(ord).toBeTruthy();
     expect(ord!.notnull).toBe(0);
+    // 0012 adds is_guest to players: NOT NULL DEFAULT 0.
+    const pCols = db.prepare(`PRAGMA table_info(players)`).all() as {
+      name: string;
+      notnull: number;
+      dflt_value: string | null;
+    }[];
+    const guest = pCols.find((c) => c.name === 'is_guest');
+    expect(guest).toBeTruthy();
+    expect(guest!.notnull).toBe(1);
+    expect(guest!.dflt_value).toBe('0');
     db.close();
   });
 

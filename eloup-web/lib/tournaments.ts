@@ -21,8 +21,18 @@ export type TournamentMemberRow = {
   discord_handle: string;
   avatar_url: string | null;
   is_admin: number;
+  is_guest: number;
   joined_at: string;
 };
+
+export const MAX_GUEST_NAME = 40;
+
+export class InvalidGuestNameError extends Error {
+  constructor() {
+    super('guest name must be 1–40 characters');
+    this.name = 'InvalidGuestNameError';
+  }
+}
 
 export type RecentMatchRow = {
   id: string;
@@ -128,7 +138,7 @@ export function listMembers(
   return db
     .prepare(
       `SELECT p.id AS player_id, p.display_name, p.discord_handle, p.avatar_url,
-              tm.joined_at,
+              p.is_guest, tm.joined_at,
               CASE WHEN ta.player_id IS NULL THEN 0 ELSE 1 END AS is_admin
          FROM tournament_members tm
          JOIN players p ON p.id = tm.player_id
@@ -158,6 +168,67 @@ export function listRecentMatches(
     .all(tournamentId, limit) as RecentMatchRow[];
 }
 
+// H12: add a guest entrant (someone with no Discord) to a tournament. The guest
+// is a normal players row with a synthetic discord_id ('guest:<uuid>' — never
+// collides with a numeric Discord snowflake, so it can never be logged into) and
+// is_guest = 1. Reuses the whole member → bracket → match → ELO pipeline. The
+// entered name is used for both display_name and discord_handle. One transaction.
+export function addGuestMember(
+  db: Database.Database,
+  tournamentId: string,
+  name: string,
+): TournamentMemberRow {
+  const trimmed = name.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_GUEST_NAME) {
+    throw new InvalidGuestNameError();
+  }
+  const t = getTournamentById(db, tournamentId);
+  if (!t) throw new Error(`tournament not found: ${tournamentId}`);
+  return db.transaction((): TournamentMemberRow => {
+    const id = randomUUID();
+    db.prepare(
+      `INSERT INTO players(id, discord_id, discord_handle, display_name, email,
+                           email_verified, avatar_url, role, is_guest)
+       VALUES (?, ?, ?, ?, NULL, 0, NULL, 'user', 1)`,
+    ).run(id, `guest:${randomUUID()}`, trimmed, trimmed);
+    db.prepare(
+      `INSERT INTO tournament_members(tournament_id, player_id) VALUES (?, ?)`,
+    ).run(tournamentId, id);
+    return listMembers(db, tournamentId).find((m) => m.player_id === id)!;
+  }).immediate();
+}
+
+// H12: delete guest players who are no longer referenced anywhere, so a deleted
+// tournament (or a removed guest member) doesn't leave orphaned guests polluting
+// the global leaderboard. Only purges is_guest rows with NO remaining membership,
+// NO match_participants, and NO bracket_matches reference — FK-safe in that order
+// (overall_ratings → ratings → players). Must run inside a transaction; the
+// caller has already removed the relevant tournament_members / matches.
+export function purgeOrphanGuests(db: Database.Database, playerIds: string[]): number {
+  const isGuest = db.prepare(`SELECT 1 FROM players WHERE id = ? AND is_guest = 1`);
+  const stillMember = db.prepare(`SELECT 1 FROM tournament_members WHERE player_id = ? LIMIT 1`);
+  const hasMatch = db.prepare(`SELECT 1 FROM match_participants WHERE player_id = ? LIMIT 1`);
+  const inBracket = db.prepare(
+    `SELECT 1 FROM bracket_matches
+      WHERE p1_player_id = ? OR p2_player_id = ? OR winner_player_id = ? LIMIT 1`,
+  );
+  const delOverall = db.prepare(`DELETE FROM overall_ratings WHERE player_id = ?`);
+  const delRatings = db.prepare(`DELETE FROM ratings WHERE player_id = ?`);
+  const delPlayer = db.prepare(`DELETE FROM players WHERE id = ?`);
+  let purged = 0;
+  for (const id of playerIds) {
+    if (!isGuest.get(id)) continue;
+    if (stillMember.get(id)) continue;
+    if (hasMatch.get(id)) continue;
+    if (inBracket.get(id, id, id)) continue;
+    delOverall.run(id);
+    delRatings.run(id);
+    delPlayer.run(id);
+    purged++;
+  }
+  return purged;
+}
+
 export function removeMember(
   db: Database.Database,
   tournamentId: string,
@@ -175,6 +246,8 @@ export function removeMember(
     const info = db
       .prepare(`DELETE FROM tournament_members WHERE tournament_id = ? AND player_id = ?`)
       .run(tournamentId, playerId);
+    // Clean up a removed guest who is now unreferenced (no-op for real players).
+    purgeOrphanGuests(db, [playerId]);
     return { removed: info.changes > 0 };
   }).immediate();
 }

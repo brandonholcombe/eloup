@@ -1,4 +1,5 @@
 import type Database from 'better-sqlite3';
+import { purgeOrphanGuests } from '@/lib/tournaments';
 
 // Admin deletion of matches + tournaments, reversing the ELO those matches
 // applied (H10). Reversal uses the stored per-game rating_delta + the overall
@@ -83,6 +84,19 @@ export function deleteTournament(
     const exists = db.prepare(`SELECT 1 FROM tournaments WHERE id = ?`).get(tournamentId);
     if (!exists) return { status: 'not_found' };
 
+    // H12: capture guest members before we tear their membership down, so we can
+    // purge the orphaned guest player rows afterward (else they'd linger on the
+    // global leaderboard forever).
+    const guestIds = (
+      db
+        .prepare(
+          `SELECT tm.player_id FROM tournament_members tm
+             JOIN players p ON p.id = tm.player_id
+            WHERE tm.tournament_id = ? AND p.is_guest = 1`,
+        )
+        .all(tournamentId) as { player_id: string }[]
+    ).map((r) => r.player_id);
+
     const matchIds = (
       db
         .prepare(`SELECT id FROM matches WHERE tournament_id = ?`)
@@ -109,6 +123,9 @@ export function deleteTournament(
     db.prepare(`DELETE FROM matches WHERE tournament_id = ?`).run(tournamentId);
     db.prepare(`DELETE FROM tournament_admins WHERE tournament_id = ?`).run(tournamentId);
     db.prepare(`DELETE FROM tournament_members WHERE tournament_id = ?`).run(tournamentId);
+    // Now that this tournament's members + matches + bracket are gone, drop any
+    // guest players who were only in this tournament.
+    purgeOrphanGuests(db, guestIds);
     db.prepare(`DELETE FROM tournaments WHERE id = ?`).run(tournamentId);
     return { status: 'ok' };
   });

@@ -14,6 +14,7 @@ import { bracketExists, loadBracket } from '@/lib/db/bracket';
 import { TournamentStandings } from '@/components/TournamentStandings';
 import { InviteCard } from '@/components/InviteCard';
 import { MemberRow } from '@/components/MemberRow';
+import { AddGuestButton } from '@/components/AddGuestButton';
 import { CreateBracketButton } from '@/components/CreateBracketButton';
 import { DeleteTournamentButton } from '@/components/DeleteTournamentButton';
 import { Card } from '@/components/ui/card';
@@ -134,6 +135,7 @@ export default async function TournamentDetailPage({
 
       <section className="mt-6">
         <h2 className="text-sm uppercase tracking-wide text-muted-foreground">Members</h2>
+        {viewerIsAdmin && <AddGuestButton slug={tournament.slug} hasBracket={hasBracket} />}
         <ul className="mt-2 space-y-2">
           {members.map((m) => (
             <MemberRow

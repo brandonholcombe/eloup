@@ -11,6 +11,7 @@ export type PlayerRow = {
   email_verified: number;
   avatar_url: string | null;
   role: Role;
+  is_guest: number;
   created_at: string;
 };
 
@@ -302,8 +303,9 @@ export function searchPlayers(
     .prepare(
       `SELECT id, display_name, discord_handle, avatar_url
          FROM players
-        WHERE LOWER(display_name)   LIKE ? ESCAPE '\\'
-           OR LOWER(discord_handle) LIKE ? ESCAPE '\\'
+        WHERE is_guest = 0
+          AND (LOWER(display_name)   LIKE ? ESCAPE '\\'
+            OR LOWER(discord_handle) LIKE ? ESCAPE '\\')
         ORDER BY display_name
         LIMIT ?`,
     )

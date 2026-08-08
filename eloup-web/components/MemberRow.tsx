@@ -44,7 +44,14 @@ export function MemberRow({
           </span>
         )}
         <div className="flex-1 truncate">
-          <div className="truncate text-sm">{member.display_name}</div>
+          <div className="flex items-center gap-1.5">
+            <span className="truncate text-sm">{member.display_name}</span>
+            {!!member.is_guest && (
+              <span className="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-300">
+                guest
+              </span>
+            )}
+          </div>
           {isAdmin && <div className="text-xs text-blue-400">admin{isCreator ? ' · creator' : ''}</div>}
         </div>
       </div>

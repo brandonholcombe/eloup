@@ -64,6 +64,17 @@ opts a tournament into a bracket (default stays the M5 named-group).
   reset in v1); mid-event roster changes unsupported (regenerate before any
   result). RC cup (points series) + board-game round-robin (8b/8a) are run by
   hand for the party.
+- **Guest entrants (H12)** — not everyone at the party has Discord, so an admin
+  can add a member by name (`addGuestMember`, `POST /api/tournaments/[slug]/guests`).
+  A guest is a normal `players` row with `is_guest = 1` and a synthetic
+  `discord_id = 'guest:<uuid>'` — it can never equal a numeric Discord snowflake,
+  so a guest can never be logged into (`0012_players_is_guest.sql`). Guests flow
+  through the whole member → bracket → match → ELO pipeline unchanged, and are
+  badged in the members list. They're excluded from player search (`searchPlayers`)
+  so they don't leak into RC driver-linking. When their only tournament is deleted
+  (or they're removed as a member), `purgeOrphanGuests` deletes the now-orphaned
+  guest player + rating rows so they don't linger on the global leaderboard;
+  guests still referenced by a match or a live bracket are kept.
 
 ## Out of scope (M5)
 
