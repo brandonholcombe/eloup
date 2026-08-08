@@ -70,8 +70,13 @@ The pod restarts, and the next sign-in matching that snowflake promotes the play
   - **`GET /api/leaderboards`**: stale-while-revalidate so the cached page renders instantly while a fresh fetch updates.
   - **Static assets** (`/_next/static/*`, `/icon-*`, `/manifest.webmanifest`): cache-first (fingerprinted).
   - **Everything else** (POST, `/api/*` other than leaderboards): bypass to network — no offline write queue.
-- `components/InstallHintAndroid.tsx` — captures `beforeinstallprompt`, shows a one-time install banner.
-- `components/InstallHintIOS.tsx` — UA-detects iOS Safari + `navigator.standalone === false`, shows "Tap Share → Add to Home Screen". Dismissal in `localStorage["eloup.install.dismissed"]`.
+- `components/InstallPrompt.tsx` (+ server `InstallPromptGate.tsx` reading the
+  session) — **login-gated** PWA install nudge (H11). Shows after sign-in on a
+  phone (`detectPlatform` in `lib/pwa/detect.ts` — iOS incl. iPadOS-as-Mac via
+  `maxTouchPoints`, or Android) that isn't standalone/dismissed, after a ~1.5s
+  delay. iOS: numbered Share → Add to Home Screen steps; Android: an Install
+  button via `beforeinstallprompt` (captured at mount) or a menu-fallback.
+  Dismissal in `localStorage["eloup.install.dismissed"]`. Not shown on desktop.
 
 ## ELO transaction lifecycle
 

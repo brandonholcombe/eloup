@@ -1,8 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { BottomNav } from '@/components/BottomNav';
-import { InstallHintIOS } from '@/components/InstallHintIOS';
-import { InstallHintAndroid } from '@/components/InstallHintAndroid';
+import { InstallPromptGate } from '@/components/InstallPromptGate';
 import { RegisterSW } from '@/lib/pwa/register-sw';
 
 export const metadata: Metadata = {
@@ -33,8 +32,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           </div>
         </header>
         <div className="mx-auto max-w-md">{children}</div>
-        <InstallHintIOS />
-        <InstallHintAndroid />
+        <InstallPromptGate />
         <BottomNav />
         <RegisterSW />
       </body>

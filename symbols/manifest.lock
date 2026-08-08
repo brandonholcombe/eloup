@@ -1,14 +1,14 @@
 {
-  "root": "de011b549e3bb6b0",
-  "generated": "2026-08-01T21:46:19Z",
+  "root": "44eb5bb8a79c7443",
+  "generated": "2026-08-08T04:27:41Z",
   "status": "aligned",
   "symbols": {
     "app": {
-      "hash": "5edd2902c5b170d3",
+      "hash": "5d4feb845a036885",
       "means": "app: anonymous_leaderboards=True, auth_lib=authjs_v5, css=tailwind, db_layer=better_sqlite3_direct, e2e_runner=playwright, first_admin_bootstrap=env_discord_id_optional, game_categories_count=8, migration_strategy=sql_files_versioned, next_major=15, next_router=app_router, pwa_strategy=manual_sw, session_strategy=jwt, test_runner=vitest, ui_lib=tailwind_shadcn",
       "docs": {
         "docs/app.md": {
-          "hash": "767b5354ebc8cf3f",
+          "hash": "4c3ed2aec4873c5b",
           "status": "current"
         }
       },
