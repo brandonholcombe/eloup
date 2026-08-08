@@ -1,7 +1,13 @@
 # H11 — Login-triggered PWA install prompt (simple instructions)
 
 ## Author: claude-opus-4.8-h11-implementer
-## Status: In Progress
+## Status: Complete
+
+## Outcome (2026-08-07) — SHIPPED, verified live
+
+Login-gated `InstallPrompt` + `InstallPromptGate`; pure `detectPlatform` (5 tests);
+old hints removed; docs + lock updated. Verified: signed-in iOS shows the Share →
+Add-to-Home-Screen steps; signed-out shows nothing. vitest 362→367.
 
 ## Reviewer findings folded (2026-08-07)
 
